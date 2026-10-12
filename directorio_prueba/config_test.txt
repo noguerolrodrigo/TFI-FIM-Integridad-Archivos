@@ -1,0 +1,1 @@
+Archivo de configuracion inicial. Estado cero.
