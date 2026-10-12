@@ -1,5 +1,4 @@
 import time
-import hashlib
 import difflib
 import os
 import shutil  # NUEVO: Librería para mover archivos a cuarentena
@@ -8,6 +7,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import bd
 import boveda
+from hashes import get_sha256
 
 # Carpeta que vamos a vigilar
 PATH_TO_WATCH = "./directorio_prueba"
@@ -34,17 +34,6 @@ def calcular_diff(ruta_antes, ruta_ahora):
         return "Archivo binario: no se genera diff de texto. La evidencia es el cambio de hash."
     diff_gen = difflib.unified_diff(lineas_viejas, lineas_nuevas, fromfile='Antes', tofile='Ahora')
     return ''.join(list(diff_gen))
-
-def get_sha256(filepath):
-    """Calcula el hash SHA-256."""
-    try:
-        sha256_hash = hashlib.sha256()
-        with open(filepath, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
-    except Exception:
-        return None
 
 def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=""):
     """Guarda el evento y la evidencia en PostgreSQL."""

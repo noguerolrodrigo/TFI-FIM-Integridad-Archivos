@@ -1,21 +1,10 @@
 import os
-import hashlib
 import bd
 import boveda
+from hashes import get_sha256
 
 # Directorio de prueba
 DIRECTORIO_A_MONITOREAR = "./directorio_prueba"
-
-def get_sha256(filepath):
-    """Calcula el hash SHA-256 de un archivo."""
-    try:
-        sha256_hash = hashlib.sha256()
-        with open(filepath, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
-    except Exception:
-        return None
 
 def generar_baseline():
     print(f"[*] Iniciando escaneo de baseline en: {DIRECTORIO_A_MONITOREAR}")
