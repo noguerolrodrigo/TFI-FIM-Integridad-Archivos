@@ -18,10 +18,22 @@ def test_modificado_si_el_hash_no_coincide(monkeypatch):
     assert monitor_fim.verificar("./x.txt", HASH_B) == (monitor_fim.MODIFICADO, HASH_A)
 
 
-def test_fuera_de_baseline_si_el_archivo_no_figura(monkeypatch):
+def test_creado_si_el_archivo_no_figura_en_la_baseline(monkeypatch):
     monkeypatch.setattr(monitor_fim, "obtener_baseline", lambda ruta: None)
 
-    assert monitor_fim.verificar("./nuevo.txt", HASH_B) == (monitor_fim.FUERA_DE_BASELINE, None)
+    assert monitor_fim.verificar("./nuevo.txt", HASH_B) == (monitor_fim.CREADO, None)
+
+
+def test_eliminado_si_figura_en_la_baseline_y_no_esta_en_disco(monkeypatch):
+    monkeypatch.setattr(monitor_fim, "obtener_baseline", lambda ruta: HASH_A)
+
+    assert monitor_fim.verificar("./x.txt", None) == (monitor_fim.ELIMINADO, HASH_A)
+
+
+def test_sin_cambios_si_no_esta_en_la_baseline_ni_en_disco(monkeypatch):
+    monkeypatch.setattr(monitor_fim, "obtener_baseline", lambda ruta: None)
+
+    assert monitor_fim.verificar("./x.txt", None) == (monitor_fim.SIN_CAMBIOS, None)
 
 
 def test_el_respaldo_es_confiable_si_coincide_con_la_baseline(tmp_path, monkeypatch):

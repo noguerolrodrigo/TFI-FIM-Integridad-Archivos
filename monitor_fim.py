@@ -18,10 +18,14 @@ PATH_TO_WATCH = "./directorio_prueba"
 # Carpeta donde se guarda la evidencia de los archivos alterados
 DIRECTORIO_CUARENTENA = "./cuarentena"
 
-# Resultados posibles de comparar un archivo con la baseline
+# Resultados posibles de comparar un archivo con la baseline.
+# Salvo SIN_CAMBIOS, son también el valor de la columna evento.
 SIN_CAMBIOS = "SIN_CAMBIOS"
 MODIFICADO = "MODIFICADO"
-FUERA_DE_BASELINE = "FUERA_DE_BASELINE"
+CREADO = "CREADO"
+ELIMINADO = "ELIMINADO"
+MOVIDO = "MOVIDO"
+RESTAURADO = "RESTAURADO"
 
 # El escaneo inicial y los eventos de watchdog corren en hilos distintos:
 # el candado hace que los archivos se procesen de a uno
@@ -58,13 +62,16 @@ def rutas_de_la_baseline():
     return [fila[0] for fila in filas]
 
 def verificar(ruta, hash_actual):
-    """Compara el hash actual del archivo con la baseline vigente.
+    """Compara el hash actual del archivo (None si no está en disco) con la baseline vigente.
 
-    Devuelve (estado, hash_baseline). El estado es SIN_CAMBIOS, MODIFICADO o FUERA_DE_BASELINE.
+    Devuelve (estado, hash_baseline). El estado es SIN_CAMBIOS, MODIFICADO, CREADO o ELIMINADO.
     """
     hash_baseline = obtener_baseline(ruta)
     if hash_baseline is None:
-        return FUERA_DE_BASELINE, None
+        # No figura en la baseline: si existe es un archivo nuevo; si no existe, no hay nada que mirar
+        return (SIN_CAMBIOS if hash_actual is None else CREADO), None
+    if hash_actual is None:
+        return ELIMINADO, hash_baseline
     if hash_actual == hash_baseline:
         return SIN_CAMBIOS, hash_baseline
     return MODIFICADO, hash_baseline
@@ -121,13 +128,16 @@ def guardar_sin_verificar(nombre, ruta, hash_actual, error):
     if hash_actual == hash_boveda:
         return
 
-    ruta_cuarentena = nueva_ruta_cuarentena(nombre)
-    shutil.copy2(ruta, ruta_cuarentena)
-
-    if hash_boveda is None:
-        texto_diff = "Sin copia en la bóveda para comparar."
+    ruta_cuarentena = None
+    if hash_actual is None:
+        texto_diff = "El archivo no está en disco."
     else:
-        texto_diff = calcular_diff(respaldo, ruta)
+        ruta_cuarentena = nueva_ruta_cuarentena(nombre)
+        shutil.copy2(ruta, ruta_cuarentena)
+        if hash_boveda is None:
+            texto_diff = "Sin copia en la bóveda para comparar."
+        else:
+            texto_diff = calcular_diff(respaldo, ruta)
 
     owner, permisos = leer_owner_y_permisos(ruta)
     pendientes.guardar({
@@ -136,12 +146,13 @@ def guardar_sin_verificar(nombre, ruta, hash_actual, error):
         "owner_archivo": owner, "permisos": permisos, "ruta_cuarentena": ruta_cuarentena,
         "motivo": str(error),
     })
-    print(f"[+] Evidencia copiada a {ruta_cuarentena} y evento guardado en {pendientes.ARCHIVO_PENDIENTES}")
+    print(f"[+] Evidencia en {ruta_cuarentena} y evento guardado en {pendientes.ARCHIVO_PENDIENTES}")
 
-def procesar(ruta):
+def procesar(ruta, movido_a=None, movido_desde=None):
     """Compara un archivo con la baseline y, si hubo un cambio, lo registra y responde.
 
     La llaman los eventos de watchdog y el escaneo inicial: el evento es solo el disparador.
+    movido_a y movido_desde solo agregan contexto cuando el disparador fue un movimiento.
     """
     with candado:
         nombre = os.path.basename(ruta)
@@ -150,10 +161,12 @@ def procesar(ruta):
         if nombre.startswith(boveda.PREFIJO_TEMPORAL):
             return
 
+        # None si el archivo no está en disco
         h = get_sha256(ruta)
 
-        # El archivo ya no está (por ejemplo, lo acabamos de mover a cuarentena)
-        if h is None:
+        if h is None and os.path.lexists(ruta):
+            if os.path.isfile(ruta):
+                print(f"[!] No se pudo leer {ruta}: no se puede verificar.")
             return
 
         # La verdad está en la baseline de la BD
@@ -168,43 +181,59 @@ def procesar(ruta):
         if estado == SIN_CAMBIOS:
             return
 
+        # Un archivo de la baseline que falta porque lo movieron se registra como MOVIDO
+        evento = MOVIDO if estado == ELIMINADO and movido_a else estado
+
         respaldo = boveda.ruta_en_boveda(ruta)
 
         # Solo se restaura si la copia de la bóveda sigue siendo la de la baseline
-        restaurable = estado == MODIFICADO and respaldo_confiable(ruta, hash_baseline)
+        restaurable = estado != CREADO and respaldo_confiable(ruta, hash_baseline)
 
-        # Sacar el Diff exacto (la evidencia)
-        if estado == FUERA_DE_BASELINE:
+        # La evidencia: qué pasó y, si se modificó el contenido, el Diff exacto
+        if estado == CREADO:
             texto_diff = "Archivo que no está en la baseline vigente."
+            if movido_desde:
+                texto_diff += f" Llegó movido desde {movido_desde}."
+        elif evento == MOVIDO:
+            texto_diff = f"El archivo de la baseline fue movido a {movido_a}."
+        elif estado == ELIMINADO:
+            texto_diff = "El archivo de la baseline fue eliminado."
         elif restaurable:
             texto_diff = calcular_diff(respaldo, ruta)
         else:
-            texto_diff = ("BÓVEDA NO CONFIABLE: la copia de respaldo falta o no coincide con la baseline. "
-                          "No se genera diff ni se restaura.")
+            texto_diff = ""
+        if estado != CREADO and not restaurable:
+            texto_diff = (texto_diff + " BÓVEDA NO CONFIABLE: la copia de respaldo falta o no coincide "
+                          "con la baseline. No se restaura.").strip()
 
-        ruta_cuarentena = nueva_ruta_cuarentena(nombre)
+        # Solo hay algo para guardar en cuarentena si el archivo está en disco
+        ruta_cuarentena = nueva_ruta_cuarentena(nombre) if h is not None else None
 
-        log_to_db(nombre, ruta, h, 'MODIFICADO', texto_diff,
+        log_to_db(nombre, ruta, h, evento, texto_diff,
                   hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
-        print(f"[!] ALERTA: Archivo MODIFICADO -> {nombre}")
+        print(f"[!] ALERTA: Archivo {evento} -> {nombre}")
         print(f"Evidencia:\n{texto_diff}\n")
 
         # --- INICIO RESPUESTA AUTOMATIZADA ---
         print("[*] Iniciando protocolo de Respuesta Automatizada...")
 
         try:
-            if estado == FUERA_DE_BASELINE:
+            if estado == CREADO:
                 # Archivo que no está en la baseline: se aísla y no hay nada que restaurar
                 shutil.move(ruta, ruta_cuarentena)
                 print(f"[+] AISLAMIENTO EXITOSO: Archivo fuera de la baseline movido a {ruta_cuarentena}")
             else:
-                # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia)
-                shutil.copy2(ruta, ruta_cuarentena)
-                print(f"[+] AISLAMIENTO EXITOSO: Evidencia copiada a {ruta_cuarentena}")
+                if h is not None:
+                    # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia)
+                    shutil.copy2(ruta, ruta_cuarentena)
+                    print(f"[+] AISLAMIENTO EXITOSO: Evidencia copiada a {ruta_cuarentena}")
 
                 if restaurable:
                     # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
                     boveda.restaurar(ruta)
+                    log_to_db(nombre, ruta, get_sha256(ruta), RESTAURADO,
+                              f"Restaurado desde la bóveda tras un evento {evento}.",
+                              hash_anterior=h, ruta_cuarentena=ruta_cuarentena)
                     print(f"[+] RESTAURACIÓN EXITOSA: El archivo original ha sido recuperado.")
                 else:
                     print("[-] NO SE RESTAURA: la bóveda no coincide con la baseline. Requiere revisión manual.")
@@ -213,6 +242,16 @@ def procesar(ruta):
         except Exception as e:
             print(f"[-] Error en la respuesta automatizada: {e}")
         # --- FIN RESPUESTA AUTOMATIZADA ---
+
+def revisar_directorio(directorio):
+    """Verifica todos los archivos de la baseline que estaban dentro de un directorio borrado o movido."""
+    try:
+        rutas = [ruta for ruta in rutas_de_la_baseline() if ruta.startswith(directorio.rstrip('/') + '/')]
+    except Exception as e:
+        print(f"[!] ALERTA: no se pudo consultar la baseline para revisar {directorio}: {e}")
+        return
+    for ruta in rutas:
+        procesar(ruta)
 
 def escaneo_inicial():
     """Al arrancar, compara la baseline vigente contra el disco.
@@ -243,9 +282,30 @@ def escaneo_inicial():
 class FIMEventHandler(FileSystemEventHandler):
     """Manejador de los eventos de Watchdog"""
 
+    def on_created(self, event):
+        if not event.is_directory:
+            procesar(event.src_path)
+
     def on_modified(self, event):
         if not event.is_directory:
             procesar(event.src_path)
+
+    def on_deleted(self, event):
+        if event.is_directory:
+            revisar_directorio(event.src_path)
+        else:
+            procesar(event.src_path)
+
+    def on_moved(self, event):
+        if event.is_directory:
+            # Lo que estaba en la baseline ya no está en su lugar, y lo que llegó al destino es nuevo
+            revisar_directorio(event.src_path)
+            for root, dirs, files in os.walk(event.dest_path):
+                for file in files:
+                    procesar(os.path.join(root, file))
+        else:
+            procesar(event.src_path, movido_a=event.dest_path)
+            procesar(event.dest_path, movido_desde=event.src_path)
 
 if __name__ == "__main__":
     print(f"[*] Iniciando Motor FIM en tiempo real sobre: {PATH_TO_WATCH}")

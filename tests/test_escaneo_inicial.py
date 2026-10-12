@@ -16,7 +16,8 @@ def test_detecta_y_restaura_lo_que_cambio_con_el_monitor_apagado(entorno_monitor
     monitor_fim.escaneo_inicial()
 
     assert get_sha256(alterado) == hash_baseline
-    assert [e["ruta_completa"] for e in entorno_monitor.eventos] == [alterado]
+    assert entorno_monitor.tipos_de_evento() == ["MODIFICADO", "RESTAURADO"]
+    assert {e["ruta_completa"] for e in entorno_monitor.eventos} == {alterado}
     assert get_sha256(intacto) == entorno_monitor.baseline[intacto]
 
 
@@ -31,6 +32,16 @@ def test_aisla_un_archivo_que_aparecio_con_el_monitor_apagado(entorno_monitor):
     assert not os.path.exists(nuevo)
     assert [e["ruta_completa"] for e in entorno_monitor.eventos] == [nuevo]
     assert len(os.listdir("./cuarentena")) == 1
+
+
+def test_restaura_un_archivo_borrado_con_el_monitor_apagado(entorno_monitor):
+    ruta = entorno_monitor.crear_en_baseline("config.txt", b"estado cero\n")
+    os.remove(ruta)
+
+    monitor_fim.escaneo_inicial()
+
+    assert get_sha256(ruta) == entorno_monitor.baseline[ruta]
+    assert entorno_monitor.tipos_de_evento() == ["ELIMINADO", "RESTAURADO"]
 
 
 def test_sin_diferencias_no_registra_nada(entorno_monitor):

@@ -27,15 +27,30 @@ class EntornoMonitor:
     def crear_en_baseline(self, nombre, contenido):
         """Crea el archivo, lo respalda en la bóveda y lo anota en la baseline."""
         ruta = self.ruta(nombre)
+        os.makedirs(os.path.dirname(ruta), exist_ok=True)
         with open(ruta, "wb") as f:
             f.write(contenido)
         boveda.respaldar(ruta)
         self.baseline[ruta] = get_sha256(ruta)
         return ruta
 
+    # Los eventos que manda watchdog, simulados
+
     def evento_modificado(self, ruta):
-        """Simula el evento que manda watchdog cuando se escribe un archivo."""
         monitor_fim.FIMEventHandler().on_modified(SimpleNamespace(is_directory=False, src_path=ruta))
+
+    def evento_creado(self, ruta):
+        monitor_fim.FIMEventHandler().on_created(SimpleNamespace(is_directory=False, src_path=ruta))
+
+    def evento_eliminado(self, ruta, es_directorio=False):
+        monitor_fim.FIMEventHandler().on_deleted(SimpleNamespace(is_directory=es_directorio, src_path=ruta))
+
+    def evento_movido(self, origen, destino, es_directorio=False):
+        monitor_fim.FIMEventHandler().on_moved(
+            SimpleNamespace(is_directory=es_directorio, src_path=origen, dest_path=destino))
+
+    def tipos_de_evento(self):
+        return [e["evento"] for e in self.eventos]
 
     def obtener_baseline(self, ruta):
         if self.bd_caida:
