@@ -1,0 +1,52 @@
+import os
+from types import SimpleNamespace
+
+import pytest
+
+import boveda
+import monitor_fim
+from hashes import get_sha256
+
+
+class EntornoMonitor:
+    """Directorio vigilado, bóveda y cuarentena temporales, con la BD reemplazada por memoria."""
+
+    def __init__(self):
+        self.directorio = "./directorio_prueba"
+        self.baseline = {}   # ruta -> hash, hace de baseline_vigente
+        self.eventos = []    # lo que el monitor habría insertado en la BD
+        os.makedirs(self.directorio)
+        os.makedirs(monitor_fim.DIRECTORIO_CUARENTENA)
+
+    def ruta(self, nombre):
+        return f"{self.directorio}/{nombre}"
+
+    def crear_en_baseline(self, nombre, contenido):
+        """Crea el archivo, lo respalda en la bóveda y lo anota en la baseline."""
+        ruta = self.ruta(nombre)
+        with open(ruta, "wb") as f:
+            f.write(contenido)
+        boveda.respaldar(ruta)
+        self.baseline[ruta] = get_sha256(ruta)
+        return ruta
+
+    def evento_modificado(self, ruta):
+        """Simula el evento que manda watchdog cuando se escribe un archivo."""
+        monitor_fim.FIMEventHandler().on_modified(SimpleNamespace(is_directory=False, src_path=ruta))
+
+    def registrar(self, nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff="",
+                  hash_anterior=None, ruta_cuarentena=None):
+        self.eventos.append({
+            "nombre_archivo": nombre_archivo, "ruta_completa": ruta_completa, "hash_sha256": hash_sha256,
+            "evento": evento, "detalles_diff": detalles_diff, "hash_anterior": hash_anterior,
+            "ruta_cuarentena": ruta_cuarentena,
+        })
+
+
+@pytest.fixture
+def entorno_monitor(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    entorno = EntornoMonitor()
+    monkeypatch.setattr(monitor_fim, "obtener_baseline", lambda ruta: entorno.baseline.get(ruta))
+    monkeypatch.setattr(monitor_fim, "log_to_db", entorno.registrar)
+    return entorno
