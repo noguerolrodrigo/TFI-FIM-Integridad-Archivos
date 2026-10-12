@@ -20,21 +20,29 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - `boveda.py`: respaldo en disco. `respaldar()` copia con `shutil.copy2`; `restaurar()` repone con un
   temporal `.fim_tmp_*` + `os.replace` (atómico); `limpiar_huerfanos()` saca lo que ya no está en la
   baseline vigente. La bóveda espeja la ruta absoluta del archivo y está en `.gitignore`.
-- `monitor_fim.py`: watchdog sobre `./directorio_prueba`. Solo maneja `on_modified`. Decide si hubo
-  cambio comparando el hash del archivo con el de la copia en la bóveda (todavía no consulta la BD),
-  calcula el diff contra la bóveda (los binarios no generan diff de texto), registra `MODIFICADO`,
-  copia el archivo alterado a `./cuarentena/{fecha}_{nombre}` y lo restaura desde la bóveda.
-  Un archivo sin respaldo se mueve a cuarentena y no se recrea. Ya no guarda nada en RAM.
+- `bd.py`: una sola conexión reutilizable a PostgreSQL (`conectar()`, `ejecutar()` con reconexión).
+- `hashes.py`: `get_sha256()`, compartida por la baseline y el monitor.
+- `monitor_fim.py`: watchdog sobre `./directorio_prueba`. Solo maneja `on_modified`. Ante cada evento
+  `verificar()` compara el hash del archivo con `baseline_vigente` en la BD: sin cambios, modificado
+  o fuera de la baseline. Calcula el diff contra la bóveda (los binarios no generan diff de texto),
+  registra `MODIFICADO` con `hash_anterior` y `ruta_cuarentena`, copia el archivo alterado a
+  `./cuarentena/{fecha}_{nombre}` y lo restaura desde la bóveda solo si la copia de la bóveda tiene
+  el hash de la baseline. Un archivo fuera de la baseline se mueve a cuarentena y no se recrea.
+  Si no puede consultar la BD, alerta por consola y no restaura. No guarda nada en RAM.
   Esta respuesta automatizada es posterior al informe de avance.
 - `sql/01_schema.sql`: esquema real exportado con pg_dump. La tabla tiene una columna `notificado`
   (boolean, default false) pensada para n8n que todavía no se usa.
 - `sql/02_baseline_versionada.sql`: columna `version_baseline`, índice único (ruta, versión) y vista
   `baseline_vigente` (filas `BASELINE` de la versión más alta). El registro es de solo-agregar:
   no se hace UPDATE ni DELETE.
-- `tests/`: pytest para la bóveda y el diff (`pytest` desde la raíz del proyecto).
-- Plan de mejoras en 12 commits acordado el 12/10/2026; hechos los commits 1 a 3. Pendientes:
-  TIMESTAMPTZ, conexión reutilizable, verificación contra la baseline de la BD, eventos nuevos,
-  permisos, temporales, configuración por `.env`, modo de restauración y permisos mínimos de `fim_user`.
+- `sql/03_fecha_con_zona.sql`: `fecha_registro` es TIMESTAMPTZ.
+- `sql/04_evidencia.sql`: columnas `hash_anterior` y `ruta_cuarentena`.
+- `tests/`: pytest para bóveda, diff, hash, verificación y conexión (`pytest` desde la raíz; los de
+  conexión solo hacen SELECT y se saltean si PostgreSQL no está levantado).
+- `.gitattributes` fija los saltos de línea en LF.
+- Plan de mejoras en 12 commits acordado el 12/10/2026; hechos los commits 1 a 6. Pendientes:
+  eventos nuevos (CREADO, ELIMINADO, MOVIDO, RESTAURADO), permisos y propietario, temporales de
+  editores, configuración por `.env`, modo de restauración y permisos mínimos de `fim_user`.
 
 ## Stack
 - Python 3 + venv: watchdog 6, psycopg2-binary, python-dotenv (ver requirements.txt)
