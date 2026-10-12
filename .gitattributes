@@ -1,0 +1,6 @@
+# Saltos de línea en LF para todos los archivos de texto
+* text=auto eol=lf
+
+# Documentos binarios: no tocar
+*.pdf binary
+*.docx binary
