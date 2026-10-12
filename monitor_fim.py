@@ -11,6 +11,7 @@ import bd
 import boveda
 import pendientes
 from hashes import get_sha256
+from metadatos import leer_owner_y_permisos
 
 # Carpeta que vamos a vigilar
 PATH_TO_WATCH = "./directorio_prueba"
@@ -25,6 +26,7 @@ MODIFICADO = "MODIFICADO"
 CREADO = "CREADO"
 ELIMINADO = "ELIMINADO"
 MOVIDO = "MOVIDO"
+PERMISOS = "PERMISOS"
 RESTAURADO = "RESTAURADO"
 
 # El escaneo inicial y los eventos de watchdog corren en hilos distintos:
@@ -52,41 +54,39 @@ def calcular_diff(ruta_antes, ruta_ahora):
     return ''.join(list(diff_gen))
 
 def obtener_baseline(ruta):
-    """Devuelve el hash del archivo en la baseline vigente de la BD, o None si no figura."""
-    filas = bd.ejecutar("SELECT hash_sha256 FROM baseline_vigente WHERE ruta_completa = %s", (ruta,))
-    return filas[0][0] if filas else None
+    """Devuelve hash, permisos y owner del archivo en la baseline vigente de la BD, o None si no figura."""
+    filas = bd.ejecutar(
+        "SELECT hash_sha256, permisos, owner_archivo FROM baseline_vigente WHERE ruta_completa = %s", (ruta,))
+    if not filas:
+        return None
+    return {"hash": filas[0][0], "permisos": filas[0][1], "owner": filas[0][2]}
 
 def rutas_de_la_baseline():
     """Devuelve las rutas de todos los archivos de la baseline vigente."""
     filas = bd.ejecutar("SELECT ruta_completa FROM baseline_vigente ORDER BY ruta_completa")
     return [fila[0] for fila in filas]
 
-def verificar(ruta, hash_actual):
-    """Compara el hash actual del archivo (None si no está en disco) con la baseline vigente.
+def verificar(ruta, hash_actual, owner=None, permisos=None):
+    """Compara el estado actual del archivo (hash None si no está en disco) con la baseline vigente.
 
-    Devuelve (estado, hash_baseline). El estado es SIN_CAMBIOS, MODIFICADO, CREADO o ELIMINADO.
+    Devuelve (estado, baseline). El estado es SIN_CAMBIOS, MODIFICADO, CREADO, ELIMINADO o PERMISOS.
     """
-    hash_baseline = obtener_baseline(ruta)
-    if hash_baseline is None:
+    baseline = obtener_baseline(ruta)
+    if baseline is None:
         # No figura en la baseline: si existe es un archivo nuevo; si no existe, no hay nada que mirar
         return (SIN_CAMBIOS if hash_actual is None else CREADO), None
     if hash_actual is None:
-        return ELIMINADO, hash_baseline
-    if hash_actual == hash_baseline:
-        return SIN_CAMBIOS, hash_baseline
-    return MODIFICADO, hash_baseline
+        return ELIMINADO, baseline
+    if hash_actual != baseline["hash"]:
+        return MODIFICADO, baseline
+    # Mismo contenido: falta ver que no le hayan cambiado los permisos o el dueño
+    if (owner, permisos) != (baseline["owner"], baseline["permisos"]):
+        return PERMISOS, baseline
+    return SIN_CAMBIOS, baseline
 
 def respaldo_confiable(ruta, hash_baseline):
     """Indica si la copia de la bóveda existe y tiene el mismo hash que la baseline."""
     return get_sha256(boveda.ruta_en_boveda(ruta)) == hash_baseline
-
-def leer_owner_y_permisos(ruta):
-    """Devuelve (owner, permisos) del archivo, o ("N/A", "N/A") si no se puede leer."""
-    try:
-        stats = os.stat(ruta)
-        return str(stats.st_uid), oct(stats.st_mode)[-3:]
-    except Exception:
-        return "N/A", "N/A"
 
 def nueva_ruta_cuarentena(nombre):
     """Arma el nombre de la copia en cuarentena y crea la carpeta si hace falta."""
@@ -148,6 +148,34 @@ def guardar_sin_verificar(nombre, ruta, hash_actual, error):
     })
     print(f"[+] Evidencia en {ruta_cuarentena} y evento guardado en {pendientes.ARCHIVO_PENDIENTES}")
 
+def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline):
+    """El contenido está intacto pero cambiaron los permisos o el dueño: se registra y se reponen."""
+    cambios = []
+    if permisos != baseline["permisos"]:
+        cambios.append(f"Permisos: {baseline['permisos']} -> {permisos}.")
+    if owner != baseline["owner"]:
+        cambios.append(f"Propietario (uid): {baseline['owner']} -> {owner}.")
+    detalle = " ".join(cambios)
+
+    log_to_db(nombre, ruta, h, PERMISOS, detalle, hash_anterior=baseline["hash"])
+    print(f"[!] ALERTA: Archivo PERMISOS -> {nombre}")
+    print(f"Evidencia:\n{detalle}\n")
+
+    print("[*] Iniciando protocolo de Respuesta Automatizada...")
+    try:
+        os.chmod(ruta, int(baseline["permisos"], 8))
+        if owner != baseline["owner"]:
+            # Cambiar el dueño de un archivo solo lo puede hacer root
+            os.chown(ruta, int(baseline["owner"]), -1)
+        log_to_db(nombre, ruta, h, RESTAURADO, "Permisos y propietario repuestos según la baseline.",
+                  hash_anterior=h)
+        print("[+] RESTAURACIÓN EXITOSA: Permisos y propietario repuestos.")
+    except PermissionError as e:
+        print(f"[-] NO SE PUDO RESTAURAR (hace falta correr como root): {e}")
+    except Exception as e:
+        print(f"[-] Error en la respuesta automatizada: {e}")
+    print("-" * 50)
+
 def procesar(ruta, movido_a=None, movido_desde=None):
     """Compara un archivo con la baseline y, si hubo un cambio, lo registra y responde.
 
@@ -169,9 +197,11 @@ def procesar(ruta, movido_a=None, movido_desde=None):
                 print(f"[!] No se pudo leer {ruta}: no se puede verificar.")
             return
 
+        owner, permisos = leer_owner_y_permisos(ruta)
+
         # La verdad está en la baseline de la BD
         try:
-            estado, hash_baseline = verificar(ruta, h)
+            estado, baseline = verificar(ruta, h, owner, permisos)
         except Exception as e:
             print(f"[!] ALERTA: no se pudo consultar la baseline para verificar {nombre}: {e}")
             print("    Sin baseline no se restaura. Revisá que PostgreSQL esté levantado.")
@@ -180,6 +210,12 @@ def procesar(ruta, movido_a=None, movido_desde=None):
 
         if estado == SIN_CAMBIOS:
             return
+
+        if estado == PERMISOS:
+            responder_a_permisos(nombre, ruta, h, owner, permisos, baseline)
+            return
+
+        hash_baseline = baseline["hash"] if baseline else None
 
         # Un archivo de la baseline que falta porque lo movieron se registra como MOVIDO
         evento = MOVIDO if estado == ELIMINADO and movido_a else estado

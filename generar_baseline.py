@@ -2,6 +2,7 @@ import os
 import bd
 import boveda
 from hashes import get_sha256
+from metadatos import leer_owner_y_permisos
 
 # Directorio de prueba
 DIRECTORIO_A_MONITOREAR = "./directorio_prueba"
@@ -33,9 +34,7 @@ def generar_baseline():
                 hash_archivo = get_sha256(ruta_completa)
                 
                 if hash_archivo:
-                    stats = os.stat(ruta_completa)
-                    permisos = oct(stats.st_mode)[-3:]
-                    owner = str(stats.st_uid)
+                    owner, permisos = leer_owner_y_permisos(ruta_completa)
 
                     query = """
                         INSERT INTO registros_archivos 

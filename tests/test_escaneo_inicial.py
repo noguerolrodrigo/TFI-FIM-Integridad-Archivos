@@ -18,7 +18,7 @@ def test_detecta_y_restaura_lo_que_cambio_con_el_monitor_apagado(entorno_monitor
     assert get_sha256(alterado) == hash_baseline
     assert entorno_monitor.tipos_de_evento() == ["MODIFICADO", "RESTAURADO"]
     assert {e["ruta_completa"] for e in entorno_monitor.eventos} == {alterado}
-    assert get_sha256(intacto) == entorno_monitor.baseline[intacto]
+    assert get_sha256(intacto) == entorno_monitor.hash_baseline(intacto)
 
 
 def test_aisla_un_archivo_que_aparecio_con_el_monitor_apagado(entorno_monitor):
@@ -40,7 +40,7 @@ def test_restaura_un_archivo_borrado_con_el_monitor_apagado(entorno_monitor):
 
     monitor_fim.escaneo_inicial()
 
-    assert get_sha256(ruta) == entorno_monitor.baseline[ruta]
+    assert get_sha256(ruta) == entorno_monitor.hash_baseline(ruta)
     assert entorno_monitor.tipos_de_evento() == ["ELIMINADO", "RESTAURADO"]
 
 

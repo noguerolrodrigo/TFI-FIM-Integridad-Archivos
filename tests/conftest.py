@@ -8,6 +8,7 @@ import boveda
 import monitor_fim
 import pendientes
 from hashes import get_sha256
+from metadatos import leer_owner_y_permisos
 
 
 class EntornoMonitor:
@@ -15,7 +16,7 @@ class EntornoMonitor:
 
     def __init__(self):
         self.directorio = "./directorio_prueba"
-        self.baseline = {}   # ruta -> hash, hace de baseline_vigente
+        self.baseline = {}   # ruta -> {hash, permisos, owner}, hace de baseline_vigente
         self.eventos = []    # lo que el monitor habría insertado en la BD
         self.bd_caida = False
         os.makedirs(self.directorio)
@@ -24,15 +25,20 @@ class EntornoMonitor:
     def ruta(self, nombre):
         return f"{self.directorio}/{nombre}"
 
-    def crear_en_baseline(self, nombre, contenido):
+    def crear_en_baseline(self, nombre, contenido, modo=0o644):
         """Crea el archivo, lo respalda en la bóveda y lo anota en la baseline."""
         ruta = self.ruta(nombre)
         os.makedirs(os.path.dirname(ruta), exist_ok=True)
         with open(ruta, "wb") as f:
             f.write(contenido)
+        os.chmod(ruta, modo)
         boveda.respaldar(ruta)
-        self.baseline[ruta] = get_sha256(ruta)
+        owner, permisos = leer_owner_y_permisos(ruta)
+        self.baseline[ruta] = {"hash": get_sha256(ruta), "permisos": permisos, "owner": owner}
         return ruta
+
+    def hash_baseline(self, ruta):
+        return self.baseline[ruta]["hash"]
 
     # Los eventos que manda watchdog, simulados
 

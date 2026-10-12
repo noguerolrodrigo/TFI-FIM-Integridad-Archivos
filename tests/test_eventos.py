@@ -23,7 +23,7 @@ def test_archivo_nuevo_se_registra_como_creado_y_va_a_cuarentena(entorno_monitor
 
 def test_archivo_borrado_se_registra_como_eliminado_y_se_restaura(entorno_monitor):
     ruta = entorno_monitor.crear_en_baseline("config.txt", b"estado cero\n")
-    hash_baseline = entorno_monitor.baseline[ruta]
+    hash_baseline = entorno_monitor.hash_baseline(ruta)
     os.remove(ruta)
 
     entorno_monitor.evento_eliminado(ruta)
@@ -46,7 +46,7 @@ def test_borrar_un_archivo_que_no_esta_en_la_baseline_no_registra_nada(entorno_m
 
 def test_archivo_movido_se_registra_se_restaura_y_el_destino_va_a_cuarentena(entorno_monitor):
     origen = entorno_monitor.crear_en_baseline("config.txt", b"estado cero\n")
-    hash_baseline = entorno_monitor.baseline[origen]
+    hash_baseline = entorno_monitor.hash_baseline(origen)
     destino = entorno_monitor.ruta("config.viejo")
     os.rename(origen, destino)
 
@@ -64,7 +64,7 @@ def test_archivo_movido_se_registra_se_restaura_y_el_destino_va_a_cuarentena(ent
 def test_reemplazo_por_renombrado_se_detecta_como_modificado(entorno_monitor):
     # Así guardan sed -i y varios editores: escriben un temporal y lo renombran encima del original
     ruta = entorno_monitor.crear_en_baseline("config.txt", b"estado cero\n")
-    hash_baseline = entorno_monitor.baseline[ruta]
+    hash_baseline = entorno_monitor.hash_baseline(ruta)
     temporal = entorno_monitor.ruta("sedAbC123")
     with open(temporal, "w") as f:
         f.write("contenido del atacante\n")
@@ -98,8 +98,8 @@ def test_directorio_borrado_restaura_los_archivos_de_la_baseline(entorno_monitor
 
     entorno_monitor.evento_eliminado(entorno_monitor.ruta("conf.d"), es_directorio=True)
 
-    assert get_sha256(uno) == entorno_monitor.baseline[uno]
-    assert get_sha256(dos) == entorno_monitor.baseline[dos]
+    assert get_sha256(uno) == entorno_monitor.hash_baseline(uno)
+    assert get_sha256(dos) == entorno_monitor.hash_baseline(dos)
     assert sorted(entorno_monitor.tipos_de_evento()) == ["ELIMINADO", "ELIMINADO", "RESTAURADO", "RESTAURADO"]
     assert all(e["ruta_completa"] != afuera for e in entorno_monitor.eventos)
 
