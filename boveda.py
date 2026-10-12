@@ -33,3 +33,15 @@ def restaurar(ruta, boveda=DIRECTORIO_BOVEDA):
     temporal = os.path.join(carpeta, PREFIJO_TEMPORAL + nombre)
     shutil.copy2(respaldo, temporal)
     os.replace(temporal, ruta)
+
+def limpiar_huerfanos(directorio, rutas_vigentes, boveda=DIRECTORIO_BOVEDA):
+    """Borra de la bóveda los respaldos de ese directorio que ya no están en la baseline vigente."""
+    vigentes = {ruta_en_boveda(ruta, boveda) for ruta in rutas_vigentes}
+    borrados = 0
+    for root, dirs, files in os.walk(ruta_en_boveda(directorio, boveda)):
+        for file in files:
+            respaldo = os.path.join(root, file)
+            if respaldo not in vigentes:
+                os.remove(respaldo)
+                borrados += 1
+    return borrados

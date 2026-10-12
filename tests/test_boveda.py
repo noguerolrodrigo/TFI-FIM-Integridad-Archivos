@@ -107,3 +107,19 @@ def test_sin_respaldo_no_restaura_ni_crea_el_archivo(entorno):
     with pytest.raises(FileNotFoundError):
         boveda.restaurar(str(archivo), dir_boveda)
     assert not archivo.exists()
+
+
+def test_limpia_los_respaldos_que_ya_no_estan_en_la_baseline(entorno):
+    vigilado, dir_boveda = entorno
+    vigente = vigilado / "vigente.txt"
+    viejo = vigilado / "viejo.txt"
+    vigente.write_text("sigo en la baseline\n")
+    viejo.write_text("me sacaron de la baseline\n")
+    boveda.respaldar(str(vigente), dir_boveda)
+    boveda.respaldar(str(viejo), dir_boveda)
+
+    borrados = boveda.limpiar_huerfanos(str(vigilado), [str(vigente)], dir_boveda)
+
+    assert borrados == 1
+    assert boveda.tiene_respaldo(str(vigente), dir_boveda)
+    assert not boveda.tiene_respaldo(str(viejo), dir_boveda)

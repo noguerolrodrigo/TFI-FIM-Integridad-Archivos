@@ -39,6 +39,12 @@ def generar_baseline():
         conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
         cursor = conn.cursor()
         archivos_procesados = 0
+        rutas_vigentes = []
+
+        # Cada corrida es una versión nueva: la vigente es siempre la más alta
+        cursor.execute("SELECT COALESCE(MAX(version_baseline), 0) + 1 FROM registros_archivos WHERE evento = 'BASELINE'")
+        version = cursor.fetchone()[0]
+        print(f"[*] Versión de baseline: {version}")
 
         for root, dirs, files in os.walk(DIRECTORIO_A_MONITOREAR):
             for file in files:
@@ -52,23 +58,30 @@ def generar_baseline():
 
                     query = """
                         INSERT INTO registros_archivos 
-                        (nombre_archivo, ruta_completa, hash_sha256, evento, owner_archivo, permisos) 
-                        VALUES (%s, %s, %s, 'BASELINE', %s, %s)
+                        (nombre_archivo, ruta_completa, hash_sha256, evento, owner_archivo, permisos, version_baseline) 
+                        VALUES (%s, %s, %s, 'BASELINE', %s, %s, %s)
                     """
-                    cursor.execute(query, (file, ruta_completa, hash_archivo, owner, permisos))
+                    cursor.execute(query, (file, ruta_completa, hash_archivo, owner, permisos, version))
 
                     # Copia confiable en disco: de acá restaura el monitor
                     boveda.respaldar(ruta_completa)
+                    rutas_vigentes.append(ruta_completa)
                     archivos_procesados += 1
                     print(f"[+] Registrado: {file} -> Hash: {hash_archivo[:15]}...")
 
         conn.commit()
         cursor.close()
         conn.close()
-        print(f"\n[*] Baseline completada. {archivos_procesados} archivo(s) guardado(s).")
+
+        # La bóveda tiene que reflejar solo la baseline vigente
+        borrados = boveda.limpiar_huerfanos(DIRECTORIO_A_MONITOREAR, rutas_vigentes)
+        if borrados:
+            print(f"[*] Bóveda: {borrados} respaldo(s) de archivos que ya no existen eliminado(s).")
+
+        print(f"\n[*] Baseline versión {version} completada. {archivos_procesados} archivo(s) guardado(s).")
 
     except Exception as e:
         print(f"[!] Error: {e}")
 
 if __name__ == "__main__":
-    generar_baseline()
+    generar_baseline()
