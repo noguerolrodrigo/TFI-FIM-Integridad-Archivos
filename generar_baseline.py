@@ -2,6 +2,7 @@ import os
 import hashlib
 import psycopg2
 from dotenv import load_dotenv
+import boveda
 
 # Cargar variables de entorno del archivo .env
 load_dotenv()
@@ -55,6 +56,9 @@ def generar_baseline():
                         VALUES (%s, %s, %s, 'BASELINE', %s, %s)
                     """
                     cursor.execute(query, (file, ruta_completa, hash_archivo, owner, permisos))
+
+                    # Copia confiable en disco: de acá restaura el monitor
+                    boveda.respaldar(ruta_completa)
                     archivos_procesados += 1
                     print(f"[+] Registrado: {file} -> Hash: {hash_archivo[:15]}...")
 

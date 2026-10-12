@@ -4,9 +4,11 @@ import psycopg2
 import difflib
 import os
 import shutil  # NUEVO: Librería para mover archivos a cuarentena
+from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from dotenv import load_dotenv
+import boveda
 
 # Cargar variables de entorno
 load_dotenv()
@@ -18,6 +20,9 @@ DB_PASS = os.getenv("DB_PASS")
 
 # Carpeta que vamos a vigilar
 PATH_TO_WATCH = "./directorio_prueba"
+
+# Carpeta donde se guarda la evidencia de los archivos alterados
+DIRECTORIO_CUARENTENA = "./cuarentena"
 
 # Memoria RAM para comparar archivos (el Diff)
 memoria_archivos = {}
@@ -74,6 +79,11 @@ class FIMEventHandler(FileSystemEventHandler):
         if not event.is_directory:
             ruta = event.src_path
             nombre = ruta.split('/')[-1]
+
+            # Los temporales de la restauración son nuestros: no son un ataque
+            if nombre.startswith(boveda.PREFIJO_TEMPORAL):
+                return
+
             h = get_sha256(ruta)
             
             lineas_nuevas = leer_archivo_texto(ruta)
@@ -98,34 +108,48 @@ class FIMEventHandler(FileSystemEventHandler):
                 # --- INICIO RESPUESTA AUTOMATIZADA ---
                 print("[*] Iniciando protocolo de Respuesta Automatizada...")
 
-                # 1. CUARENTENA: Movemos el archivo infectado a la carpeta segura
-                timestamp = time.strftime("%Y%m%d_%H%M%S")
-                ruta_cuarentena = f"./cuarentena/{nombre}_infectado_{timestamp}.txt"
-                
+                # El nombre lleva microsegundos para que dos eventos seguidos no se pisen
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                ruta_cuarentena = os.path.join(DIRECTORIO_CUARENTENA, f"{timestamp}_{nombre}")
+
                 try:
-                    # Movemos el archivo modificado
-                    shutil.move(ruta, ruta_cuarentena)
-                    print(f"[+] AISLAMIENTO EXITOSO: Archivo movido a {ruta_cuarentena}")
-                    
-                    # 2. RESTAURACIÓN: Reescribimos el archivo original usando la memoria RAM
-                    with open(ruta, 'w', encoding='utf-8') as f:
-                        f.writelines(lineas_viejas)
-                    print(f"[+] RESTAURACIÓN EXITOSA: El archivo original ha sido recuperado.")
-                    
-                    # Restauramos la memoria interna para que siga vigilando correctamente
-                    memoria_archivos[ruta] = lineas_viejas
+                    if boveda.tiene_respaldo(ruta):
+                        # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia)
+                        shutil.copy2(ruta, ruta_cuarentena)
+                        print(f"[+] AISLAMIENTO EXITOSO: Evidencia copiada a {ruta_cuarentena}")
+
+                        # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
+                        boveda.restaurar(ruta)
+                        print(f"[+] RESTAURACIÓN EXITOSA: El archivo original ha sido recuperado.")
+
+                        # Restauramos la memoria interna para que siga vigilando correctamente
+                        memoria_archivos[ruta] = lineas_viejas
+                    else:
+                        # Archivo que no está en la baseline: se aísla y no hay nada que restaurar
+                        shutil.move(ruta, ruta_cuarentena)
+                        memoria_archivos.pop(ruta, None)
+                        print(f"[+] AISLAMIENTO EXITOSO: Archivo sin respaldo movido a {ruta_cuarentena}")
                     print("-" * 50)
-                    
+
                 except Exception as e:
                     print(f"[-] Error en la respuesta automatizada: {e}")
                 # --- FIN RESPUESTA AUTOMATIZADA ---
 
 if __name__ == "__main__":
+    os.makedirs(DIRECTORIO_CUARENTENA, exist_ok=True)
+
     # Pre-cargar memoria con el estado inicial
+    sin_respaldo = 0
     for root, dirs, files in os.walk(PATH_TO_WATCH):
         for file in files:
             ruta = os.path.join(root, file)
             memoria_archivos[ruta] = leer_archivo_texto(ruta)
+            if not boveda.tiene_respaldo(ruta):
+                sin_respaldo += 1
+
+    if sin_respaldo:
+        print(f"[!] {sin_respaldo} archivo(s) sin respaldo en la bóveda: si se modifican van a cuarentena")
+        print("    y no se restauran. Ejecutá generar_baseline.py para respaldarlos.")
 
     print(f"[*] Iniciando Motor FIM en tiempo real sobre: {PATH_TO_WATCH}")
     event_handler = FIMEventHandler()
