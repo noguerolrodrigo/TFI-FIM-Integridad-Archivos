@@ -42,6 +42,11 @@ class EntornoMonitor:
             raise ConnectionError("BD caída (simulada)")
         return self.baseline.get(ruta)
 
+    def rutas_de_la_baseline(self):
+        if self.bd_caida:
+            raise ConnectionError("BD caída (simulada)")
+        return sorted(self.baseline)
+
     def pendientes(self):
         """Devuelve los eventos del log local de pendientes."""
         if not os.path.exists(pendientes.ARCHIVO_PENDIENTES):
@@ -63,5 +68,6 @@ def entorno_monitor(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     entorno = EntornoMonitor()
     monkeypatch.setattr(monitor_fim, "obtener_baseline", entorno.obtener_baseline)
+    monkeypatch.setattr(monitor_fim, "rutas_de_la_baseline", entorno.rutas_de_la_baseline)
     monkeypatch.setattr(monitor_fim, "log_to_db", entorno.registrar)
     return entorno
