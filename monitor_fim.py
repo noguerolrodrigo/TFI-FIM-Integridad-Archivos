@@ -10,6 +10,7 @@ from watchdog.events import FileSystemEventHandler
 import bd
 import boveda
 import pendientes
+from filtros import es_ignorado
 from hashes import get_sha256
 from metadatos import leer_owner_y_permisos
 
@@ -185,8 +186,8 @@ def procesar(ruta, movido_a=None, movido_desde=None):
     with candado:
         nombre = os.path.basename(ruta)
 
-        # Los temporales de la restauración son nuestros: no son un ataque
-        if nombre.startswith(boveda.PREFIJO_TEMPORAL):
+        # Temporales de editores y de nuestra propia restauración: no se vigilan
+        if es_ignorado(ruta):
             return
 
         # None si el archivo no está en disco

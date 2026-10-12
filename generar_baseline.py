@@ -1,6 +1,7 @@
 import os
 import bd
 import boveda
+from filtros import es_ignorado
 from hashes import get_sha256
 from metadatos import leer_owner_y_permisos
 
@@ -31,6 +32,12 @@ def generar_baseline():
         for root, dirs, files in os.walk(DIRECTORIO_A_MONITOREAR):
             for file in files:
                 ruta_completa = os.path.join(root, file)
+
+                # Los temporales no entran en la baseline (el monitor tampoco los vigila)
+                if es_ignorado(ruta_completa):
+                    print(f"[-] Ignorado (temporal): {file}")
+                    continue
+
                 hash_archivo = get_sha256(ruta_completa)
                 
                 if hash_archivo:
