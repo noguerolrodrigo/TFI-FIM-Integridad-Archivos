@@ -4,3 +4,4 @@ __pycache__/
 cuarentena/
 boveda/
 .pytest_cache/
+logs/

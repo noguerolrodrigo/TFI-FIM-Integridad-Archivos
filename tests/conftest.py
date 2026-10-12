@@ -1,3 +1,4 @@
+import json
 import os
 from types import SimpleNamespace
 
@@ -5,6 +6,7 @@ import pytest
 
 import boveda
 import monitor_fim
+import pendientes
 from hashes import get_sha256
 
 
@@ -15,6 +17,7 @@ class EntornoMonitor:
         self.directorio = "./directorio_prueba"
         self.baseline = {}   # ruta -> hash, hace de baseline_vigente
         self.eventos = []    # lo que el monitor habría insertado en la BD
+        self.bd_caida = False
         os.makedirs(self.directorio)
         os.makedirs(monitor_fim.DIRECTORIO_CUARENTENA)
 
@@ -34,6 +37,18 @@ class EntornoMonitor:
         """Simula el evento que manda watchdog cuando se escribe un archivo."""
         monitor_fim.FIMEventHandler().on_modified(SimpleNamespace(is_directory=False, src_path=ruta))
 
+    def obtener_baseline(self, ruta):
+        if self.bd_caida:
+            raise ConnectionError("BD caída (simulada)")
+        return self.baseline.get(ruta)
+
+    def pendientes(self):
+        """Devuelve los eventos del log local de pendientes."""
+        if not os.path.exists(pendientes.ARCHIVO_PENDIENTES):
+            return []
+        with open(pendientes.ARCHIVO_PENDIENTES, encoding="utf-8") as f:
+            return [json.loads(linea) for linea in f]
+
     def registrar(self, nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff="",
                   hash_anterior=None, ruta_cuarentena=None):
         self.eventos.append({
@@ -47,6 +62,6 @@ class EntornoMonitor:
 def entorno_monitor(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     entorno = EntornoMonitor()
-    monkeypatch.setattr(monitor_fim, "obtener_baseline", lambda ruta: entorno.baseline.get(ruta))
+    monkeypatch.setattr(monitor_fim, "obtener_baseline", entorno.obtener_baseline)
     monkeypatch.setattr(monitor_fim, "log_to_db", entorno.registrar)
     return entorno

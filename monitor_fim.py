@@ -7,6 +7,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import bd
 import boveda
+import pendientes
 from hashes import get_sha256
 
 # Carpeta que vamos a vigilar
@@ -61,18 +62,26 @@ def respaldo_confiable(ruta, hash_baseline):
     """Indica si la copia de la bóveda existe y tiene el mismo hash que la baseline."""
     return get_sha256(boveda.ruta_en_boveda(ruta)) == hash_baseline
 
+def leer_owner_y_permisos(ruta):
+    """Devuelve (owner, permisos) del archivo, o ("N/A", "N/A") si no se puede leer."""
+    try:
+        stats = os.stat(ruta)
+        return str(stats.st_uid), oct(stats.st_mode)[-3:]
+    except Exception:
+        return "N/A", "N/A"
+
+def nueva_ruta_cuarentena(nombre):
+    """Arma el nombre de la copia en cuarentena y crea la carpeta si hace falta."""
+    os.makedirs(DIRECTORIO_CUARENTENA, exist_ok=True)
+    # El nombre lleva microsegundos para que dos eventos seguidos no se pisen
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    return os.path.join(DIRECTORIO_CUARENTENA, f"{timestamp}_{nombre}")
+
 def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff="",
               hash_anterior=None, ruta_cuarentena=None):
-    """Guarda el evento y la evidencia en PostgreSQL."""
+    """Guarda el evento y la evidencia en PostgreSQL. Si la BD falla, lo deja en el log local."""
+    owner, permisos = leer_owner_y_permisos(ruta_completa)
     try:
-        # Obtenemos owner y permisos
-        try:
-            stats = os.stat(ruta_completa)
-            permisos = oct(stats.st_mode)[-3:]
-            owner = str(stats.st_uid)
-        except:
-            permisos, owner = "N/A", "N/A"
-
         query = """
             INSERT INTO registros_archivos 
             (nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff, owner_archivo, permisos,
@@ -84,6 +93,39 @@ def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=
                             hash_anterior, ruta_cuarentena))
     except Exception as e:
         print(f"Error en BD: {e}")
+        pendientes.guardar({
+            "evento": evento, "nombre_archivo": nombre_archivo, "ruta_completa": ruta_completa,
+            "hash_sha256": hash_sha256, "hash_anterior": hash_anterior, "detalles_diff": detalles_diff,
+            "owner_archivo": owner, "permisos": permisos, "ruta_cuarentena": ruta_cuarentena,
+            "motivo": str(e),
+        })
+        print(f"[*] Evento guardado en {pendientes.ARCHIVO_PENDIENTES}")
+
+def guardar_sin_verificar(nombre, ruta, hash_actual, error):
+    """Sin acceso a la baseline no se sabe si el cambio es legítimo: se guarda la evidencia y no se restaura."""
+    respaldo = boveda.ruta_en_boveda(ruta)
+    hash_boveda = get_sha256(respaldo)
+
+    # Si el archivo es igual a su copia en la bóveda, lo más probable es que no haya cambiado
+    if hash_actual == hash_boveda:
+        return
+
+    ruta_cuarentena = nueva_ruta_cuarentena(nombre)
+    shutil.copy2(ruta, ruta_cuarentena)
+
+    if hash_boveda is None:
+        texto_diff = "Sin copia en la bóveda para comparar."
+    else:
+        texto_diff = calcular_diff(respaldo, ruta)
+
+    owner, permisos = leer_owner_y_permisos(ruta)
+    pendientes.guardar({
+        "evento": "SIN_VERIFICAR", "nombre_archivo": nombre, "ruta_completa": ruta,
+        "hash_sha256": hash_actual, "hash_boveda": hash_boveda, "detalles_diff": texto_diff,
+        "owner_archivo": owner, "permisos": permisos, "ruta_cuarentena": ruta_cuarentena,
+        "motivo": str(error),
+    })
+    print(f"[+] Evidencia copiada a {ruta_cuarentena} y evento guardado en {pendientes.ARCHIVO_PENDIENTES}")
 
 class FIMEventHandler(FileSystemEventHandler):
     """Manejador de los eventos de Watchdog"""
@@ -108,7 +150,8 @@ class FIMEventHandler(FileSystemEventHandler):
                 estado, hash_baseline = verificar(ruta, h)
             except Exception as e:
                 print(f"[!] ALERTA: no se pudo consultar la baseline para verificar {nombre}: {e}")
-                print("    Sin baseline no se registra ni se restaura. Revisá que PostgreSQL esté levantado.")
+                print("    Sin baseline no se restaura. Revisá que PostgreSQL esté levantado.")
+                guardar_sin_verificar(nombre, ruta, h, e)
                 return
 
             # Guardamos en BD si hubo cambios reales
@@ -127,9 +170,7 @@ class FIMEventHandler(FileSystemEventHandler):
                     texto_diff = ("BÓVEDA NO CONFIABLE: la copia de respaldo falta o no coincide con la baseline. "
                                   "No se genera diff ni se restaura.")
 
-                # El nombre lleva microsegundos para que dos eventos seguidos no se pisen
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                ruta_cuarentena = os.path.join(DIRECTORIO_CUARENTENA, f"{timestamp}_{nombre}")
+                ruta_cuarentena = nueva_ruta_cuarentena(nombre)
 
                 log_to_db(nombre, ruta, h, 'MODIFICADO', texto_diff,
                           hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
