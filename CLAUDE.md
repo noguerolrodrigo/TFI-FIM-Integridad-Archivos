@@ -21,14 +21,20 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   temporal `.fim_tmp_*` + `os.replace` (atómico); `limpiar_huerfanos()` saca lo que ya no está en la
   baseline vigente. La bóveda espeja la ruta absoluta del archivo y está en `.gitignore`.
 - `bd.py`: una sola conexión reutilizable a PostgreSQL (`conectar()`, `ejecutar()` con reconexión).
-- `hashes.py`: `get_sha256()`, compartida por la baseline y el monitor.
-- `monitor_fim.py`: watchdog sobre `./directorio_prueba`. Solo maneja `on_modified`. Ante cada evento
-  `verificar()` compara el hash del archivo con `baseline_vigente` en la BD: sin cambios, modificado
-  o fuera de la baseline. Calcula el diff contra la bóveda (los binarios no generan diff de texto),
-  registra `MODIFICADO` con `hash_anterior` y `ruta_cuarentena`, copia el archivo alterado a
-  `./cuarentena/{fecha}_{nombre}` y lo restaura desde la bóveda solo si la copia de la bóveda tiene
-  el hash de la baseline. Un archivo fuera de la baseline se mueve a cuarentena y no se recrea.
-  Si no puede consultar la BD, alerta por consola y no restaura. No guarda nada en RAM.
+- `hashes.py`: `get_sha256()`. `metadatos.py`: `leer_owner_y_permisos()` (uid y modo octal, con el
+  dígito de setuid si lo hay). `filtros.py`: `PATRONES_IGNORADOS` y `es_ignorado()` (temporales de
+  editores y de la restauración). Los tres los comparten la baseline y el monitor.
+- `pendientes.py`: log local `logs/eventos_pendientes.jsonl` para eventos que no llegaron a la BD.
+- `monitor_fim.py`: watchdog sobre `./directorio_prueba` con `on_created`, `on_modified`,
+  `on_deleted` y `on_moved`. Todos llaman a `procesar(ruta)`: el evento es solo el disparador y
+  `verificar()` clasifica comparando el disco con `baseline_vigente` (hash, permisos y owner):
+  `MODIFICADO`, `CREADO`, `ELIMINADO`, `MOVIDO` o `PERMISOS`.
+  - Respuesta: copia de evidencia a `./cuarentena/{fecha}_{nombre}` y restauración desde la bóveda
+    (solo si la copia de la bóveda tiene el hash de la baseline), con una fila `RESTAURADO`.
+    `CREADO` se mueve a cuarentena. `PERMISOS` se repone con chmod/chown (chown requiere root).
+  - Al arrancar hace un escaneo inicial de la baseline contra el disco. Sin baseline no arranca.
+  - Con la BD caída no restaura: copia la evidencia y deja el evento como `SIN_VERIFICAR` en el
+    log local. Falta reinsertar esos eventos cuando vuelve la BD.
   Esta respuesta automatizada es posterior al informe de avance.
 - `sql/01_schema.sql`: esquema real exportado con pg_dump. La tabla tiene una columna `notificado`
   (boolean, default false) pensada para n8n que todavía no se usa.
@@ -37,12 +43,11 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   no se hace UPDATE ni DELETE.
 - `sql/03_fecha_con_zona.sql`: `fecha_registro` es TIMESTAMPTZ.
 - `sql/04_evidencia.sql`: columnas `hash_anterior` y `ruta_cuarentena`.
-- `tests/`: pytest para bóveda, diff, hash, verificación y conexión (`pytest` desde la raíz; los de
-  conexión solo hacen SELECT y se saltean si PostgreSQL no está levantado).
+- `tests/`: pytest (`pytest` desde la raíz). Los del monitor usan una baseline en memoria
+  (`tests/conftest.py`); los de conexión solo hacen SELECT y se saltean si PostgreSQL no está.
 - `.gitattributes` fija los saltos de línea en LF.
-- Plan de mejoras en 12 commits acordado el 12/10/2026; hechos los commits 1 a 6. Pendientes:
-  eventos nuevos (CREADO, ELIMINADO, MOVIDO, RESTAURADO), permisos y propietario, temporales de
-  editores, configuración por `.env`, modo de restauración y permisos mínimos de `fim_user`.
+- Plan de mejoras en 12 commits acordado el 12/10/2026; hechos los commits 1 a 9. Pendientes:
+  configuración por `.env` (10), modo de restauración (11) y permisos mínimos de `fim_user` (12).
 
 ## Stack
 - Python 3 + venv: watchdog 6, psycopg2-binary, python-dotenv (ver requirements.txt)
