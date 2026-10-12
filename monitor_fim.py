@@ -1,22 +1,13 @@
 import time
 import hashlib
-import psycopg2
 import difflib
 import os
 import shutil  # NUEVO: Librería para mover archivos a cuarentena
 from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from dotenv import load_dotenv
+import bd
 import boveda
-
-# Cargar variables de entorno
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASS")
 
 # Carpeta que vamos a vigilar
 PATH_TO_WATCH = "./directorio_prueba"
@@ -58,9 +49,6 @@ def get_sha256(filepath):
 def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=""):
     """Guarda el evento y la evidencia en PostgreSQL."""
     try:
-        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
-        cursor = conn.cursor()
-        
         # Obtenemos owner y permisos
         try:
             stats = os.stat(ruta_completa)
@@ -74,10 +62,8 @@ def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=
             (nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff, owner_archivo, permisos) 
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(query, (nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff, owner, permisos))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        # Se reutiliza la conexión del proceso en vez de abrir una por evento
+        bd.ejecutar(query, (nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff, owner, permisos))
     except Exception as e:
         print(f"Error en BD: {e}")
 
@@ -169,3 +155,4 @@ if __name__ == "__main__":
         observer.stop()
         print("\n[*] Motor FIM detenido.")
     observer.join()
+    bd.cerrar()

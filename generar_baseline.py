@@ -1,16 +1,7 @@
 import os
 import hashlib
-import psycopg2
-from dotenv import load_dotenv
+import bd
 import boveda
-
-# Cargar variables de entorno del archivo .env
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASS")
 
 # Directorio de prueba
 DIRECTORIO_A_MONITOREAR = "./directorio_prueba"
@@ -36,7 +27,8 @@ def generar_baseline():
             f.write("Archivo de configuración inicial. Estado cero.")
 
     try:
-        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+        # Toda la baseline va en una sola transacción: o entra completa o no entra
+        conn = bd.conectar()
         cursor = conn.cursor()
         archivos_procesados = 0
         rutas_vigentes = []
@@ -71,7 +63,7 @@ def generar_baseline():
 
         conn.commit()
         cursor.close()
-        conn.close()
+        bd.cerrar()
 
         # La bóveda tiene que reflejar solo la baseline vigente
         borrados = boveda.limpiar_huerfanos(DIRECTORIO_A_MONITOREAR, rutas_vigentes)
