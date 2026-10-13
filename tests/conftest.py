@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import pytest
 
 import boveda
+import config
 import monitor_fim
-import pendientes
 from hashes import get_sha256
 from metadatos import leer_owner_y_permisos
 
@@ -15,12 +15,12 @@ class EntornoMonitor:
     """Directorio vigilado, bóveda y cuarentena temporales, con la BD reemplazada por memoria."""
 
     def __init__(self):
-        self.directorio = "./directorio_prueba"
+        self.directorio = config.RUTAS_MONITOREADAS[0]
         self.baseline = {}   # ruta -> {hash, permisos, owner}, hace de baseline_vigente
         self.eventos = []    # lo que el monitor habría insertado en la BD
         self.bd_caida = False
         os.makedirs(self.directorio)
-        os.makedirs(monitor_fim.DIRECTORIO_CUARENTENA)
+        os.makedirs(config.DIRECTORIO_CUARENTENA)
 
     def ruta(self, nombre):
         return f"{self.directorio}/{nombre}"
@@ -70,9 +70,9 @@ class EntornoMonitor:
 
     def pendientes(self):
         """Devuelve los eventos del log local de pendientes."""
-        if not os.path.exists(pendientes.ARCHIVO_PENDIENTES):
+        if not os.path.exists(config.ARCHIVO_PENDIENTES):
             return []
-        with open(pendientes.ARCHIVO_PENDIENTES, encoding="utf-8") as f:
+        with open(config.ARCHIVO_PENDIENTES, encoding="utf-8") as f:
             return [json.loads(linea) for linea in f]
 
     def registrar(self, nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff="",
@@ -84,9 +84,19 @@ class EntornoMonitor:
         })
 
 
-@pytest.fixture
-def entorno_monitor(tmp_path, monkeypatch):
+@pytest.fixture(autouse=True)
+def configuracion_aislada(tmp_path, monkeypatch):
+    """Todos los tests trabajan en una carpeta temporal: nunca tocan la bóveda ni la cuarentena reales."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(config, "RUTAS_MONITOREADAS", [str(tmp_path / "directorio_prueba")])
+    monkeypatch.setattr(config, "DIRECTORIO_BOVEDA", str(tmp_path / "boveda"))
+    monkeypatch.setattr(config, "DIRECTORIO_CUARENTENA", str(tmp_path / "cuarentena"))
+    monkeypatch.setattr(config, "ARCHIVO_PENDIENTES", str(tmp_path / "logs" / "eventos_pendientes.jsonl"))
+    monkeypatch.setattr(config, "PATRONES_IGNORADOS", ["*.swp", "*.swo", "*.swx", "*~", "*.tmp"])
+
+
+@pytest.fixture
+def entorno_monitor(monkeypatch):
     entorno = EntornoMonitor()
     monkeypatch.setattr(monitor_fim, "obtener_baseline", entorno.obtener_baseline)
     monkeypatch.setattr(monitor_fim, "rutas_de_la_baseline", entorno.rutas_de_la_baseline)

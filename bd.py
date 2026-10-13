@@ -1,14 +1,5 @@
-import os
 import psycopg2
-from dotenv import load_dotenv
-
-# Cargar variables de entorno del archivo .env
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASS")
+import config
 
 # Única conexión del proceso: se abre la primera vez que hace falta
 _conexion = None
@@ -17,7 +8,8 @@ def conectar():
     """Devuelve la conexión a la BD. La abre la primera vez y la reabre si se cerró."""
     global _conexion
     if _conexion is None or _conexion.closed:
-        _conexion = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+        _conexion = psycopg2.connect(host=config.DB_HOST, database=config.DB_NAME,
+                                     user=config.DB_USER, password=config.DB_PASS)
     return _conexion
 
 def cerrar():

@@ -9,16 +9,11 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import bd
 import boveda
+import config
 import pendientes
 from filtros import es_ignorado
 from hashes import get_sha256
 from metadatos import leer_owner_y_permisos
-
-# Carpeta que vamos a vigilar
-PATH_TO_WATCH = "./directorio_prueba"
-
-# Carpeta donde se guarda la evidencia de los archivos alterados
-DIRECTORIO_CUARENTENA = "./cuarentena"
 
 # Resultados posibles de comparar un archivo con la baseline.
 # Salvo SIN_CAMBIOS, son también el valor de la columna evento.
@@ -91,10 +86,10 @@ def respaldo_confiable(ruta, hash_baseline):
 
 def nueva_ruta_cuarentena(nombre):
     """Arma el nombre de la copia en cuarentena y crea la carpeta si hace falta."""
-    os.makedirs(DIRECTORIO_CUARENTENA, exist_ok=True)
+    os.makedirs(config.DIRECTORIO_CUARENTENA, exist_ok=True)
     # El nombre lleva microsegundos para que dos eventos seguidos no se pisen
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    return os.path.join(DIRECTORIO_CUARENTENA, f"{timestamp}_{nombre}")
+    return os.path.join(config.DIRECTORIO_CUARENTENA, f"{timestamp}_{nombre}")
 
 def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff="",
               hash_anterior=None, ruta_cuarentena=None):
@@ -118,7 +113,7 @@ def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=
             "owner_archivo": owner, "permisos": permisos, "ruta_cuarentena": ruta_cuarentena,
             "motivo": str(e),
         })
-        print(f"[*] Evento guardado en {pendientes.ARCHIVO_PENDIENTES}")
+        print(f"[*] Evento guardado en {config.ARCHIVO_PENDIENTES}")
 
 def guardar_sin_verificar(nombre, ruta, hash_actual, error):
     """Sin acceso a la baseline no se sabe si el cambio es legítimo: se guarda la evidencia y no se restaura."""
@@ -147,7 +142,7 @@ def guardar_sin_verificar(nombre, ruta, hash_actual, error):
         "owner_archivo": owner, "permisos": permisos, "ruta_cuarentena": ruta_cuarentena,
         "motivo": str(error),
     })
-    print(f"[+] Evidencia en {ruta_cuarentena} y evento guardado en {pendientes.ARCHIVO_PENDIENTES}")
+    print(f"[+] Evidencia en {ruta_cuarentena} y evento guardado en {config.ARCHIVO_PENDIENTES}")
 
 def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline):
     """El contenido está intacto pero cambiaron los permisos o el dueño: se registra y se reponen."""
@@ -184,6 +179,8 @@ def procesar(ruta, movido_a=None, movido_desde=None):
     movido_a y movido_desde solo agregan contexto cuando el disparador fue un movimiento.
     """
     with candado:
+        # La baseline guarda rutas absolutas
+        ruta = os.path.abspath(ruta)
         nombre = os.path.basename(ruta)
 
         # Temporales de editores y de nuestra propia restauración: no se vigilan
@@ -282,8 +279,9 @@ def procesar(ruta, movido_a=None, movido_desde=None):
 
 def revisar_directorio(directorio):
     """Verifica todos los archivos de la baseline que estaban dentro de un directorio borrado o movido."""
+    directorio = os.path.abspath(directorio)
     try:
-        rutas = [ruta for ruta in rutas_de_la_baseline() if ruta.startswith(directorio.rstrip('/') + '/')]
+        rutas = [ruta for ruta in rutas_de_la_baseline() if config.dentro_de(ruta, directorio)]
     except Exception as e:
         print(f"[!] ALERTA: no se pudo consultar la baseline para revisar {directorio}: {e}")
         return
@@ -302,14 +300,17 @@ def escaneo_inicial():
         print(f"[!] No se pudo hacer el escaneo inicial (sin acceso a la baseline): {e}")
         return
 
-    if not rutas:
-        print("[!] No hay baseline: ejecutá generar_baseline.py antes de iniciar el monitor.")
+    # Sin una baseline para estas rutas, todo parecería archivo nuevo y terminaría en cuarentena
+    if not any(config.dentro_de(ruta, directorio) for ruta in rutas for directorio in config.RUTAS_MONITOREADAS):
+        print("[!] La baseline vigente no tiene archivos de las rutas monitoreadas.")
+        print("    Ejecutá generar_baseline.py antes de iniciar el monitor.")
         sys.exit(1)
 
     # Se suman los archivos que están en disco aunque no figuren en la baseline
-    for root, dirs, files in os.walk(PATH_TO_WATCH):
-        for file in files:
-            rutas.add(os.path.join(root, file))
+    for directorio in config.RUTAS_MONITOREADAS:
+        for root, dirs, files in os.walk(directorio):
+            for file in files:
+                rutas.add(os.path.join(root, file))
 
     print(f"[*] Escaneo inicial: verificando {len(rutas)} archivo(s) contra la baseline...")
     for ruta in sorted(rutas):
@@ -344,11 +345,34 @@ class FIMEventHandler(FileSystemEventHandler):
             procesar(event.src_path, movido_a=event.dest_path)
             procesar(event.dest_path, movido_desde=event.src_path)
 
+def validar_configuracion():
+    """Corta si la bóveda, la cuarentena o los logs quedaron adentro de un directorio vigilado."""
+    propias = {"DIR_BOVEDA": config.DIRECTORIO_BOVEDA, "DIR_CUARENTENA": config.DIRECTORIO_CUARENTENA,
+               "DIR_LOGS": os.path.dirname(config.ARCHIVO_PENDIENTES)}
+    for nombre, carpeta in propias.items():
+        for directorio in config.RUTAS_MONITOREADAS:
+            if config.dentro_de(carpeta, directorio):
+                print(f"[!] Configuración inválida: {nombre} ({carpeta}) está dentro del directorio vigilado")
+                print(f"    {directorio}. El monitor reaccionaría a sus propios archivos.")
+                sys.exit(1)
+
 if __name__ == "__main__":
-    print(f"[*] Iniciando Motor FIM en tiempo real sobre: {PATH_TO_WATCH}")
+    validar_configuracion()
+
     event_handler = FIMEventHandler()
     observer = Observer()
-    observer.schedule(event_handler, PATH_TO_WATCH, recursive=True)
+    vigilados = 0
+    for directorio in config.RUTAS_MONITOREADAS:
+        if os.path.isdir(directorio):
+            observer.schedule(event_handler, directorio, recursive=True)
+            print(f"[*] Iniciando Motor FIM en tiempo real sobre: {directorio}")
+            vigilados += 1
+        else:
+            print(f"[!] No existe el directorio {directorio}: no se vigila.")
+
+    if not vigilados:
+        print("[!] No hay ningún directorio para vigilar. Revisá RUTAS_MONITOREADAS en el .env.")
+        sys.exit(1)
 
     # Primero se empieza a escuchar y después se escanea: así no queda ninguna ventana sin cubrir
     observer.start()

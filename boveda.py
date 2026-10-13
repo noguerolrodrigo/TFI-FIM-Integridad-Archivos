@@ -1,28 +1,29 @@
 import os
 import shutil
+import config
 
-# Carpeta donde se guarda la copia confiable de cada archivo de la baseline
-DIRECTORIO_BOVEDA = "./boveda"
+# La carpeta de la bóveda sale de la configuración (DIR_BOVEDA). Las funciones aceptan
+# otra carpeta por parámetro, que es lo que usan los tests.
 
 # Prefijo de los temporales que crea la restauración (el monitor los ignora)
 PREFIJO_TEMPORAL = ".fim_tmp_"
 
-def ruta_en_boveda(ruta, boveda=DIRECTORIO_BOVEDA):
+def ruta_en_boveda(ruta, boveda=None):
     """Devuelve dónde va el respaldo de un archivo: su ruta absoluta espejada dentro de la bóveda."""
-    return os.path.join(boveda, os.path.abspath(ruta).lstrip(os.sep))
+    return os.path.join(boveda or config.DIRECTORIO_BOVEDA, os.path.abspath(ruta).lstrip(os.sep))
 
-def tiene_respaldo(ruta, boveda=DIRECTORIO_BOVEDA):
+def tiene_respaldo(ruta, boveda=None):
     """Indica si el archivo tiene una copia en la bóveda."""
     return os.path.isfile(ruta_en_boveda(ruta, boveda))
 
-def respaldar(ruta, boveda=DIRECTORIO_BOVEDA):
+def respaldar(ruta, boveda=None):
     """Copia el archivo a la bóveda byte a byte, conservando permisos y fechas."""
     destino = ruta_en_boveda(ruta, boveda)
     os.makedirs(os.path.dirname(destino), exist_ok=True)
     shutil.copy2(ruta, destino)
     return destino
 
-def restaurar(ruta, boveda=DIRECTORIO_BOVEDA):
+def restaurar(ruta, boveda=None):
     """Repone el archivo desde la bóveda. Lanza FileNotFoundError si no hay respaldo."""
     respaldo = ruta_en_boveda(ruta, boveda)
     carpeta, nombre = os.path.split(os.path.abspath(ruta))
@@ -34,7 +35,7 @@ def restaurar(ruta, boveda=DIRECTORIO_BOVEDA):
     shutil.copy2(respaldo, temporal)
     os.replace(temporal, ruta)
 
-def limpiar_huerfanos(directorio, rutas_vigentes, boveda=DIRECTORIO_BOVEDA):
+def limpiar_huerfanos(directorio, rutas_vigentes, boveda=None):
     """Borra de la bóveda los respaldos de ese directorio que ya no están en la baseline vigente."""
     vigentes = {ruta_en_boveda(ruta, boveda) for ruta in rutas_vigentes}
     borrados = 0

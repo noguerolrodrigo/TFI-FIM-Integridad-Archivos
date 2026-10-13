@@ -2,6 +2,7 @@ import psycopg2
 import pytest
 
 import bd
+import config
 
 
 @pytest.fixture
@@ -27,7 +28,8 @@ def test_reconecta_si_la_conexion_se_cae(base_disponible):
     pid_original = pid_del_servidor()
 
     # Se corta la conexión desde otra sesión, como si se reiniciara el servidor
-    otra = psycopg2.connect(host=bd.DB_HOST, database=bd.DB_NAME, user=bd.DB_USER, password=bd.DB_PASS)
+    otra = psycopg2.connect(host=config.DB_HOST, database=config.DB_NAME,
+                            user=config.DB_USER, password=config.DB_PASS)
     with otra.cursor() as cursor:
         cursor.execute("SELECT pg_terminate_backend(%s)", (pid_original,))
     otra.close()

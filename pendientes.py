@@ -1,12 +1,11 @@
 import json
 import os
 from datetime import datetime
+import config
 
-# Eventos que no se pudieron guardar en la BD (una línea JSON por evento)
-ARCHIVO_PENDIENTES = "./logs/eventos_pendientes.jsonl"
-
-def guardar(evento, archivo=ARCHIVO_PENDIENTES):
-    """Agrega el evento al log local, con la fecha y hora (con zona) en que ocurrió."""
+def guardar(evento, archivo=None):
+    """Agrega el evento al log local (una línea JSON), con la fecha y hora con zona en que ocurrió."""
+    archivo = archivo or config.ARCHIVO_PENDIENTES
     os.makedirs(os.path.dirname(archivo), exist_ok=True)
     registro = {"fecha_registro": datetime.now().astimezone().isoformat()}
     registro.update(evento)

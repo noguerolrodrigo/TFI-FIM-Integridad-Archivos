@@ -59,8 +59,7 @@ def test_sin_cambios_si_no_esta_en_la_baseline_ni_en_disco(monkeypatch):
     assert monitor_fim.verificar("./x.txt", None, "N/A", "N/A") == (monitor_fim.SIN_CAMBIOS, None)
 
 
-def test_el_respaldo_es_confiable_si_coincide_con_la_baseline(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_el_respaldo_es_confiable_si_coincide_con_la_baseline(tmp_path):
     archivo = tmp_path / "config.txt"
     archivo.write_text("estado cero\n")
     hash_baseline = get_sha256(str(archivo))
@@ -69,8 +68,7 @@ def test_el_respaldo_es_confiable_si_coincide_con_la_baseline(tmp_path, monkeypa
     assert monitor_fim.respaldo_confiable(str(archivo), hash_baseline)
 
 
-def test_el_respaldo_alterado_no_es_confiable(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_el_respaldo_alterado_no_es_confiable(tmp_path):
     archivo = tmp_path / "config.txt"
     archivo.write_text("estado cero\n")
     hash_baseline = get_sha256(str(archivo))
@@ -82,7 +80,6 @@ def test_el_respaldo_alterado_no_es_confiable(tmp_path, monkeypatch):
     assert not monitor_fim.respaldo_confiable(str(archivo), hash_baseline)
 
 
-def test_sin_respaldo_no_es_confiable(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_sin_respaldo_no_es_confiable(tmp_path):
 
     assert not monitor_fim.respaldo_confiable(str(tmp_path / "config.txt"), HASH_A)

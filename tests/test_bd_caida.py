@@ -2,8 +2,8 @@ import json
 import os
 
 import bd
+import config
 import monitor_fim
-import pendientes
 from hashes import get_sha256
 
 
@@ -38,9 +38,7 @@ def test_con_la_bd_caida_un_archivo_igual_a_la_boveda_no_genera_evidencia(entorn
     assert os.listdir("./cuarentena") == []
 
 
-def test_si_falla_el_insert_el_evento_queda_en_el_log_local(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-
+def test_si_falla_el_insert_el_evento_queda_en_el_log_local(monkeypatch):
     def falla(query, parametros=None):
         raise ConnectionError("BD caída (simulada)")
 
@@ -49,7 +47,7 @@ def test_si_falla_el_insert_el_evento_queda_en_el_log_local(tmp_path, monkeypatc
     monitor_fim.log_to_db("config.txt", "./config.txt", "a" * 64, "MODIFICADO", "el diff",
                           hash_anterior="b" * 64, ruta_cuarentena="./cuarentena/x")
 
-    with open(pendientes.ARCHIVO_PENDIENTES, encoding="utf-8") as f:
+    with open(config.ARCHIVO_PENDIENTES, encoding="utf-8") as f:
         pendiente = json.loads(f.readline())
     assert pendiente["evento"] == "MODIFICADO"
     assert pendiente["hash_sha256"] == "a" * 64
