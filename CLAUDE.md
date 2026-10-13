@@ -14,9 +14,13 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   (implementación 30, cobertura de monitoreo 25, alertas 25, documentación 20). NO copiar su esquema.
 
 ## Estado actual del código (octubre 2026)
-- `generar_baseline.py`: recorre `./directorio_prueba`, calcula SHA-256, owner (uid) y permisos
+- `config.py`: toda la configuración sale del `.env` (ver `.env.example`): `RUTAS_MONITOREADAS`
+  (varios directorios separados por `:`), `DIR_BOVEDA`, `DIR_CUARENTENA`, `DIR_LOGS`,
+  `PATRONES_IGNORADOS` y `MODO_RESTAURACION`. Las rutas se guardan absolutas; las relativas se
+  resuelven desde la carpeta del proyecto. Por defecto se vigila `./directorio_prueba`.
+- `generar_baseline.py`: recorre las rutas monitoreadas, calcula SHA-256, owner (uid) y permisos
   octales, inserta eventos `BASELINE` en `registros_archivos` con un `version_baseline` nuevo en cada
-  corrida y copia cada archivo a la bóveda (`./boveda/`).
+  corrida y copia cada archivo a la bóveda. Hay que volver a correrlo si cambian las rutas.
 - `boveda.py`: respaldo en disco. `respaldar()` copia con `shutil.copy2`; `restaurar()` repone con un
   temporal `.fim_tmp_*` + `os.replace` (atómico); `limpiar_huerfanos()` saca lo que ya no está en la
   baseline vigente. La bóveda espeja la ruta absoluta del archivo y está en `.gitignore`.
@@ -25,14 +29,19 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   dígito de setuid si lo hay). `filtros.py`: `PATRONES_IGNORADOS` y `es_ignorado()` (temporales de
   editores y de la restauración). Los tres los comparten la baseline y el monitor.
 - `pendientes.py`: log local `logs/eventos_pendientes.jsonl` para eventos que no llegaron a la BD.
-- `monitor_fim.py`: watchdog sobre `./directorio_prueba` con `on_created`, `on_modified`,
+- `monitor_fim.py`: watchdog sobre las rutas monitoreadas con `on_created`, `on_modified`,
   `on_deleted` y `on_moved`. Todos llaman a `procesar(ruta)`: el evento es solo el disparador y
   `verificar()` clasifica comparando el disco con `baseline_vigente` (hash, permisos y owner):
   `MODIFICADO`, `CREADO`, `ELIMINADO`, `MOVIDO` o `PERMISOS`.
   - Respuesta: copia de evidencia a `./cuarentena/{fecha}_{nombre}` y restauración desde la bóveda
     (solo si la copia de la bóveda tiene el hash de la baseline), con una fila `RESTAURADO`.
     `CREADO` se mueve a cuarentena. `PERMISOS` se repone con chmod/chown (chown requiere root).
-  - Al arrancar hace un escaneo inicial de la baseline contra el disco. Sin baseline no arranca.
+  - Al arrancar hace un escaneo inicial de la baseline contra el disco. No arranca si la baseline
+    vigente no tiene archivos de las rutas monitoreadas, ni si la bóveda, la cuarentena o los logs
+    están dentro de un directorio vigilado.
+  - `MODO_RESTAURACION=automatica` (por defecto) restaura solo. Con `aprobacion` registra y guarda
+    la evidencia pero no restaura: la restauración la dispara `restaurar.py <ruta>`, que deja en la
+    fila `RESTAURADO` quién aprobó. `CREADO` va a cuarentena en los dos modos.
   - Con la BD caída no restaura: copia la evidencia y deja el evento como `SIN_VERIFICAR` en el
     log local. Falta reinsertar esos eventos cuando vuelve la BD.
   Esta respuesta automatizada es posterior al informe de avance.
@@ -43,15 +52,40 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   no se hace UPDATE ni DELETE.
 - `sql/03_fecha_con_zona.sql`: `fecha_registro` es TIMESTAMPTZ.
 - `sql/04_evidencia.sql`: columnas `hash_anterior` y `ruta_cuarentena`.
+- `sql/05_permisos_minimos.sql`: tabla, vista y base pasan a ser de `postgres`; a `fim_user` le
+  quedan solo SELECT e INSERT. Se corre como superusuario:
+  `sudo -u postgres psql -v ON_ERROR_STOP=1 -d fim_db < sql/05_permisos_minimos.sql`.
+  Una vez aplicada, las migraciones nuevas también hay que correrlas como `postgres`, y `fim_user`
+  ya no puede marcar `notificado` (para n8n: un rol aparte con UPDATE solo sobre esa columna).
 - `tests/`: pytest (`pytest` desde la raíz). Los del monitor usan una baseline en memoria
   (`tests/conftest.py`); los de conexión solo hacen SELECT y se saltean si PostgreSQL no está.
 - `.gitattributes` fija los saltos de línea en LF.
-- Plan de mejoras en 12 commits acordado el 12/10/2026; hechos los commits 1 a 9. Pendientes:
-  configuración por `.env` (10), modo de restauración (11) y permisos mínimos de `fim_user` (12).
+- Plan de mejoras del motor en 12 commits (Paso 2) terminado el 13/10/2026. Siguen el Paso 3
+  (orquestación con n8n) y el Paso 4 (medición de MTTD/MTTR y más pruebas).
+
+## Limitaciones conocidas (declararlas en el informe)
+- **Evidencia incompleta en escrituras largas o en varios pasos.** El monitor reacciona al primer
+  evento de escritura y restaura enseguida; lo que el programa siga escribiendo después se pierde.
+  El ataque se frena, pero la copia en cuarentena y el diff muestran solo la primera parte.
+- **Carpeta movida.** Si se mueve una carpeta entera, los archivos de la baseline se restauran en
+  su lugar original y los movidos van a cuarentena, pero la carpeta nueva queda vacía en el
+  directorio vigilado: el monitor no borra directorios.
+- **Temporales ignorados.** Un archivo malicioso cuyo nombre coincida con `PATRONES_IGNORADOS`
+  (por ejemplo `algo.tmp`) no se detecta. Es el costo de bajar los falsos positivos.
+- **BD caída.** Sin acceso a la baseline no se restaura: se guarda la evidencia y el evento queda
+  en `logs/eventos_pendientes.jsonl`. Todavía no se reinsertan cuando vuelve la BD.
+- **Bóveda en el mismo equipo.** La bóveda está en el mismo disco y con el mismo usuario que los
+  archivos vigilados. Se mitiga verificando su hash contra la baseline antes de restaurar; en
+  producción debería estar en otro equipo o ser de root.
+- **Propietario.** Reponer el dueño de un archivo (`chown`) requiere correr como root; sin root
+  el cambio se registra pero no se repone.
+- **Inmutabilidad.** El registro es de solo-agregar para la cuenta del agente (`fim_user`), no
+  para el superusuario de PostgreSQL.
+- **Solo directorios.** `RUTAS_MONITOREADAS` acepta directorios, no archivos sueltos.
 
 ## Stack
 - Python 3 + venv: watchdog 6, psycopg2-binary, python-dotenv (ver requirements.txt)
-- PostgreSQL local: base `fim_db`, usuario `fim_user`, credenciales en `.env`
+- PostgreSQL local: base `fim_db`, usuario `fim_user`, credenciales en `.env` (plantilla: `.env.example`)
 - n8n (pendiente de integrar)
 - Ubuntu en WSL2 sobre Windows
 
@@ -60,7 +94,7 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   eventos fiables de archivos del lado Windows.
 - En WSL los servicios no arrancan solos: `sudo service postgresql start` antes de trabajar.
 - Activar el entorno: `source venv/bin/activate`.
-- `.env`, `venv/` y `cuarentena/` están en `.gitignore`. Nunca commitear credenciales.
+- `.env`, `venv/`, `cuarentena/`, `boveda/` y `logs/` están en `.gitignore`. Nunca commitear credenciales.
 - Monitorear rutas reales (`/etc`, `/usr/bin`) requiere root; para pruebas usar `./directorio_prueba`.
 
 ## Convenciones
