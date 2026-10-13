@@ -44,3 +44,10 @@ ARCHIVO_PENDIENTES = os.path.join(ruta_absoluta(os.getenv("DIR_LOGS") or "./logs
 
 # Temporales de editores que no se vigilan ni entran en la baseline, separados por ","
 PATRONES_IGNORADOS = leer_patrones(os.getenv("PATRONES_IGNORADOS") or "*.swp,*.swo,*.swx,*~,*.tmp")
+
+# Quién decide la restauración:
+#   automatica: el monitor restaura apenas detecta el cambio.
+#   aprobacion: el monitor registra y guarda la evidencia, y la restauración la dispara
+#               una persona con restaurar.py (o n8n, después de la aprobación).
+MODOS_RESTAURACION = ("automatica", "aprobacion")
+MODO_RESTAURACION = (os.getenv("MODO_RESTAURACION") or "automatica").strip().lower()

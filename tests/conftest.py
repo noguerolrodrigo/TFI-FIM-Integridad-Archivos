@@ -93,6 +93,8 @@ def configuracion_aislada(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DIRECTORIO_CUARENTENA", str(tmp_path / "cuarentena"))
     monkeypatch.setattr(config, "ARCHIVO_PENDIENTES", str(tmp_path / "logs" / "eventos_pendientes.jsonl"))
     monkeypatch.setattr(config, "PATRONES_IGNORADOS", ["*.swp", "*.swo", "*.swx", "*~", "*.tmp"])
+    monkeypatch.setattr(config, "MODO_RESTAURACION", "automatica")
+    monitor_fim.avisados.clear()
 
 
 @pytest.fixture

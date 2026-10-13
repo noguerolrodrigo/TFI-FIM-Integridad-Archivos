@@ -25,6 +25,15 @@ MOVIDO = "MOVIDO"
 PERMISOS = "PERMISOS"
 RESTAURADO = "RESTAURADO"
 
+# Otros resultados de procesar() que no son eventos de la BD
+PENDIENTE = "PENDIENTE"            # detectado, esperando aprobación para restaurar
+NO_RESTAURADO = "NO_RESTAURADO"    # no se pudo restaurar (bóveda no confiable, falta root, error)
+SIN_VERIFICAR = "SIN_VERIFICAR"    # no se pudo consultar la baseline
+
+# En modo aprobación: cambios ya avisados que siguen sin restaurar, para no repetir el registro
+# cada vez que llega otro evento del mismo archivo. ruta -> (estado, hash, owner, permisos)
+avisados = {}
+
 # El escaneo inicial y los eventos de watchdog corren en hilos distintos:
 # el candado hace que los archivos se procesen de a uno
 candado = threading.Lock()
@@ -144,7 +153,7 @@ def guardar_sin_verificar(nombre, ruta, hash_actual, error):
     })
     print(f"[+] Evidencia en {ruta_cuarentena} y evento guardado en {config.ARCHIVO_PENDIENTES}")
 
-def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline):
+def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por=None):
     """El contenido está intacto pero cambiaron los permisos o el dueño: se registra y se reponen."""
     cambios = []
     if permisos != baseline["permisos"]:
@@ -153,30 +162,57 @@ def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline):
         cambios.append(f"Propietario (uid): {baseline['owner']} -> {owner}.")
     detalle = " ".join(cambios)
 
-    log_to_db(nombre, ruta, h, PERMISOS, detalle, hash_anterior=baseline["hash"])
-    print(f"[!] ALERTA: Archivo PERMISOS -> {nombre}")
-    print(f"Evidencia:\n{detalle}\n")
+    # Si viene de restaurar.py, la detección ya la registró el monitor
+    if aprobado_por is None:
+        log_to_db(nombre, ruta, h, PERMISOS, detalle, hash_anterior=baseline["hash"])
+        print(f"[!] ALERTA: Archivo PERMISOS -> {nombre}")
+        print(f"Evidencia:\n{detalle}\n")
+
+    if not se_restaura_ahora(aprobado_por):
+        avisar_pendiente(ruta)
+        return PENDIENTE
 
     print("[*] Iniciando protocolo de Respuesta Automatizada...")
+    resultado = NO_RESTAURADO
     try:
         os.chmod(ruta, int(baseline["permisos"], 8))
         if owner != baseline["owner"]:
             # Cambiar el dueño de un archivo solo lo puede hacer root
             os.chown(ruta, int(baseline["owner"]), -1)
-        log_to_db(nombre, ruta, h, RESTAURADO, "Permisos y propietario repuestos según la baseline.",
+        log_to_db(nombre, ruta, h, RESTAURADO,
+                  "Permisos y propietario repuestos según la baseline" + firma_de_aprobacion(aprobado_por),
                   hash_anterior=h)
         print("[+] RESTAURACIÓN EXITOSA: Permisos y propietario repuestos.")
+        resultado = RESTAURADO
     except PermissionError as e:
         print(f"[-] NO SE PUDO RESTAURAR (hace falta correr como root): {e}")
     except Exception as e:
         print(f"[-] Error en la respuesta automatizada: {e}")
     print("-" * 50)
+    return resultado
 
-def procesar(ruta, movido_a=None, movido_desde=None):
+def se_restaura_ahora(aprobado_por):
+    """En modo automático se restaura siempre; en modo aprobación, solo si alguien lo aprobó."""
+    return config.MODO_RESTAURACION == "automatica" or aprobado_por is not None
+
+def firma_de_aprobacion(aprobado_por):
+    """Texto que deja constancia de quién aprobó la restauración (vacío en modo automático)."""
+    if aprobado_por is None:
+        return "."
+    return f", con aprobación manual de {aprobado_por} (restaurar.py)."
+
+def avisar_pendiente(ruta):
+    print("[*] PENDIENTE DE APROBACIÓN: no se restaura. Para restaurar, ejecutá:")
+    print(f"    python restaurar.py '{ruta}'")
+    print("-" * 50)
+
+def procesar(ruta, movido_a=None, movido_desde=None, aprobado_por=None):
     """Compara un archivo con la baseline y, si hubo un cambio, lo registra y responde.
 
     La llaman los eventos de watchdog y el escaneo inicial: el evento es solo el disparador.
     movido_a y movido_desde solo agregan contexto cuando el disparador fue un movimiento.
+    aprobado_por lo pasa restaurar.py: es quien autorizó la restauración en modo aprobación.
+    Devuelve qué pasó: SIN_CAMBIOS, RESTAURADO, PENDIENTE, NO_RESTAURADO, CREADO o SIN_VERIFICAR.
     """
     with candado:
         # La baseline guarda rutas absolutas
@@ -185,7 +221,7 @@ def procesar(ruta, movido_a=None, movido_desde=None):
 
         # Temporales de editores y de nuestra propia restauración: no se vigilan
         if es_ignorado(ruta):
-            return
+            return SIN_CAMBIOS
 
         # None si el archivo no está en disco
         h = get_sha256(ruta)
@@ -193,7 +229,7 @@ def procesar(ruta, movido_a=None, movido_desde=None):
         if h is None and os.path.lexists(ruta):
             if os.path.isfile(ruta):
                 print(f"[!] No se pudo leer {ruta}: no se puede verificar.")
-            return
+            return SIN_VERIFICAR
 
         owner, permisos = leer_owner_y_permisos(ruta)
 
@@ -204,14 +240,25 @@ def procesar(ruta, movido_a=None, movido_desde=None):
             print(f"[!] ALERTA: no se pudo consultar la baseline para verificar {nombre}: {e}")
             print("    Sin baseline no se restaura. Revisá que PostgreSQL esté levantado.")
             guardar_sin_verificar(nombre, ruta, h, e)
-            return
+            return SIN_VERIFICAR
 
         if estado == SIN_CAMBIOS:
-            return
+            avisados.pop(ruta, None)
+            return SIN_CAMBIOS
+
+        # En modo aprobación el archivo queda alterado hasta que alguien aprueba:
+        # el mismo cambio se registra una sola vez
+        if not se_restaura_ahora(aprobado_por) and estado != CREADO:
+            if avisados.get(ruta) == (estado, h, owner, permisos):
+                return PENDIENTE
+            avisados[ruta] = (estado, h, owner, permisos)
 
         if estado == PERMISOS:
-            responder_a_permisos(nombre, ruta, h, owner, permisos, baseline)
-            return
+            return responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por)
+
+        if estado == CREADO and aprobado_por is not None:
+            print(f"[-] {ruta} no está en la baseline: no hay nada que restaurar.")
+            return CREADO
 
         hash_baseline = baseline["hash"] if baseline else None
 
@@ -243,39 +290,49 @@ def procesar(ruta, movido_a=None, movido_desde=None):
         # Solo hay algo para guardar en cuarentena si el archivo está en disco
         ruta_cuarentena = nueva_ruta_cuarentena(nombre) if h is not None else None
 
-        log_to_db(nombre, ruta, h, evento, texto_diff,
-                  hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
-        print(f"[!] ALERTA: Archivo {evento} -> {nombre}")
-        print(f"Evidencia:\n{texto_diff}\n")
+        # Si viene de restaurar.py, la detección ya la registró el monitor
+        if aprobado_por is None:
+            log_to_db(nombre, ruta, h, evento, texto_diff,
+                      hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
+            print(f"[!] ALERTA: Archivo {evento} -> {nombre}")
+            print(f"Evidencia:\n{texto_diff}\n")
 
         # --- INICIO RESPUESTA AUTOMATIZADA ---
         print("[*] Iniciando protocolo de Respuesta Automatizada...")
 
+        resultado = NO_RESTAURADO
         try:
             if estado == CREADO:
-                # Archivo que no está en la baseline: se aísla y no hay nada que restaurar
+                # Archivo que no está en la baseline: se aísla y no hay nada que restaurar.
+                # Es automático en los dos modos: es una contención y se puede deshacer.
                 shutil.move(ruta, ruta_cuarentena)
                 print(f"[+] AISLAMIENTO EXITOSO: Archivo fuera de la baseline movido a {ruta_cuarentena}")
+                resultado = CREADO
             else:
                 if h is not None:
                     # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia)
                     shutil.copy2(ruta, ruta_cuarentena)
                     print(f"[+] AISLAMIENTO EXITOSO: Evidencia copiada a {ruta_cuarentena}")
 
-                if restaurable:
+                if not restaurable:
+                    print("[-] NO SE RESTAURA: la bóveda no coincide con la baseline. Requiere revisión manual.")
+                elif not se_restaura_ahora(aprobado_por):
+                    avisar_pendiente(ruta)
+                    return PENDIENTE
+                else:
                     # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
                     boveda.restaurar(ruta)
                     log_to_db(nombre, ruta, get_sha256(ruta), RESTAURADO,
-                              f"Restaurado desde la bóveda tras un evento {evento}.",
+                              f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por),
                               hash_anterior=h, ruta_cuarentena=ruta_cuarentena)
                     print(f"[+] RESTAURACIÓN EXITOSA: El archivo original ha sido recuperado.")
-                else:
-                    print("[-] NO SE RESTAURA: la bóveda no coincide con la baseline. Requiere revisión manual.")
+                    resultado = RESTAURADO
             print("-" * 50)
 
         except Exception as e:
             print(f"[-] Error en la respuesta automatizada: {e}")
         # --- FIN RESPUESTA AUTOMATIZADA ---
+        return resultado
 
 def revisar_directorio(directorio):
     """Verifica todos los archivos de la baseline que estaban dentro de un directorio borrado o movido."""
@@ -346,7 +403,13 @@ class FIMEventHandler(FileSystemEventHandler):
             procesar(event.dest_path, movido_desde=event.src_path)
 
 def validar_configuracion():
-    """Corta si la bóveda, la cuarentena o los logs quedaron adentro de un directorio vigilado."""
+    """Corta si el modo de restauración no existe o si la bóveda, la cuarentena o los logs
+    quedaron adentro de un directorio vigilado."""
+    if config.MODO_RESTAURACION not in config.MODOS_RESTAURACION:
+        print(f"[!] Configuración inválida: MODO_RESTAURACION={config.MODO_RESTAURACION}.")
+        print(f"    Valores posibles: {', '.join(config.MODOS_RESTAURACION)}.")
+        sys.exit(1)
+
     propias = {"DIR_BOVEDA": config.DIRECTORIO_BOVEDA, "DIR_CUARENTENA": config.DIRECTORIO_CUARENTENA,
                "DIR_LOGS": os.path.dirname(config.ARCHIVO_PENDIENTES)}
     for nombre, carpeta in propias.items():
@@ -358,6 +421,7 @@ def validar_configuracion():
 
 if __name__ == "__main__":
     validar_configuracion()
+    print(f"[*] Modo de restauración: {config.MODO_RESTAURACION}")
 
     event_handler = FIMEventHandler()
     observer = Observer()
