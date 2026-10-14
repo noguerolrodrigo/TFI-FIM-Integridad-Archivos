@@ -21,6 +21,7 @@ class EntornoMonitor:
         self.eventos = []    # lo que el monitor habría insertado en la BD
         self.bd_caida = False
         self.avisos = []     # lo que el monitor le habría mandado a n8n
+        self.ventanas = []   # (id, ruta) de las ventanas de mantenimiento abiertas
         os.makedirs(self.directorio)
         os.makedirs(config.DIRECTORIO_CUARENTENA)
 
@@ -108,5 +109,6 @@ def entorno_monitor(monkeypatch):
     monkeypatch.setattr(monitor_fim, "obtener_baseline", entorno.obtener_baseline)
     monkeypatch.setattr(monitor_fim, "rutas_de_la_baseline", entorno.rutas_de_la_baseline)
     monkeypatch.setattr(monitor_fim, "log_to_db", entorno.registrar)
+    monkeypatch.setattr(monitor_fim, "ventanas_vigentes", lambda: list(entorno.ventanas))
     monkeypatch.setattr(notificador, "notificar", entorno.avisos.append)
     return entorno

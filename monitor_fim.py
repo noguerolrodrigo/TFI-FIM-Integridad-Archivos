@@ -30,6 +30,7 @@ RESTAURADO = "RESTAURADO"
 PENDIENTE = "PENDIENTE"            # detectado, esperando aprobación para restaurar
 NO_RESTAURADO = "NO_RESTAURADO"    # no se pudo restaurar (bóveda no confiable, falta root, error)
 SIN_VERIFICAR = "SIN_VERIFICAR"    # no se pudo consultar la baseline
+AUTORIZADO = "AUTORIZADO"          # cambio dentro de una ventana de mantenimiento: no se restaura
 
 # En modo aprobación: cambios ya avisados que siguen sin restaurar, para no repetir el registro
 # cada vez que llega otro evento del mismo archivo. ruta -> (estado, hash, owner, permisos)
@@ -89,6 +90,24 @@ def verificar(ruta, hash_actual, owner=None, permisos=None):
     if (owner, permisos) != (baseline["owner"], baseline["permisos"]):
         return PERMISOS, baseline
     return SIN_CAMBIOS, baseline
+
+def ventanas_vigentes():
+    """Devuelve [(id, ruta)] de las ventanas de mantenimiento abiertas en este momento."""
+    return bd.ejecutar("SELECT id, ruta FROM ventanas_mantenimiento "
+                       "WHERE desde <= CURRENT_TIMESTAMP AND hasta > CURRENT_TIMESTAMP ORDER BY id")
+
+def ventana_que_autoriza(ruta):
+    """Devuelve el id de una ventana vigente que cubra la ruta (el archivo o un directorio que lo
+    contiene), o None. Si no se puede consultar, no hay autorización: ante la duda se responde."""
+    try:
+        ventanas = ventanas_vigentes()
+    except Exception as e:
+        print(f"[!] No se pudieron consultar las ventanas de mantenimiento: {e}")
+        return None
+    for ventana_id, ruta_ventana in ventanas:
+        if config.dentro_de(ruta, ruta_ventana):
+            return ventana_id
+    return None
 
 def respaldo_confiable(ruta, hash_baseline):
     """Indica si la copia de la bóveda existe y tiene el mismo hash que la baseline."""
@@ -217,6 +236,33 @@ def avisar_pendiente(ruta):
     print(f"    python restaurar.py '{ruta}'")
     print("-" * 50)
 
+def registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a=None):
+    """Un cambio dentro de una ventana de mantenimiento: queda registrado con su evidencia, sin restaurar.
+
+    Mientras el archivo siga igual, los eventos repetidos no generan otra fila.
+    """
+    if avisados.get(ruta) == (AUTORIZADO, h, owner, permisos):
+        return AUTORIZADO, None
+    avisados[ruta] = (AUTORIZADO, h, owner, permisos)
+
+    evento = MOVIDO if estado == ELIMINADO and movido_a else estado
+    hash_baseline = baseline["hash"] if baseline else None
+    detalle = f"Cambio autorizado por la ventana de mantenimiento #{ventana_id}: no se restaura."
+    if estado == MODIFICADO and boveda.tiene_respaldo(ruta):
+        detalle += "\n" + calcular_diff(boveda.ruta_en_boveda(ruta), ruta)
+
+    # La copia en cuarentena queda como registro de lo que se cambió (no se mueve el archivo)
+    ruta_cuarentena = None
+    if h is not None:
+        ruta_cuarentena = nueva_ruta_cuarentena(nombre)
+        shutil.copy2(ruta, ruta_cuarentena)
+
+    evento_id = log_to_db(nombre, ruta, h, evento, detalle,
+                          hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
+    print(f"[*] Archivo {evento} -> {nombre}: autorizado por la ventana de mantenimiento #{ventana_id}.")
+    print("-" * 50)
+    return AUTORIZADO, evento_id
+
 def procesar(ruta, movido_a=None, movido_desde=None, aprobado_por=None):
     """Compara un archivo con la baseline y, si hubo un cambio, lo registra, responde y avisa a n8n.
 
@@ -263,6 +309,12 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     if estado == SIN_CAMBIOS:
         avisados.pop(ruta, None)
         return SIN_CAMBIOS, None
+
+    # Cambio autorizado de antemano (PB-A): se registra con su evidencia pero no se toca el archivo
+    if aprobado_por is None:
+        ventana_id = ventana_que_autoriza(ruta)
+        if ventana_id is not None:
+            return registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a)
 
     # En modo aprobación el archivo queda alterado hasta que alguien aprueba:
     # el mismo cambio se registra una sola vez
