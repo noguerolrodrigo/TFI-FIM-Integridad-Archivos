@@ -10,6 +10,7 @@ from watchdog.events import FileSystemEventHandler
 import bd
 import boveda
 import config
+import notificador
 import pendientes
 from filtros import es_ignorado
 from hashes import get_sha256
@@ -102,7 +103,10 @@ def nueva_ruta_cuarentena(nombre):
 
 def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff="",
               hash_anterior=None, ruta_cuarentena=None):
-    """Guarda el evento y la evidencia en PostgreSQL. Si la BD falla, lo deja en el log local."""
+    """Guarda el evento y la evidencia en PostgreSQL y devuelve su id.
+
+    Si la BD falla, lo deja en el log local y devuelve None.
+    """
     owner, permisos = leer_owner_y_permisos(ruta_completa)
     try:
         query = """
@@ -110,10 +114,12 @@ def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=
             (nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff, owner_archivo, permisos,
              hash_anterior, ruta_cuarentena) 
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """
         # Se reutiliza la conexión del proceso en vez de abrir una por evento
-        bd.ejecutar(query, (nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff, owner, permisos,
+        filas = bd.ejecutar(query, (nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff, owner, permisos,
                             hash_anterior, ruta_cuarentena))
+        return filas[0][0]
     except Exception as e:
         print(f"Error en BD: {e}")
         pendientes.guardar({
@@ -123,6 +129,7 @@ def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=
             "motivo": str(e),
         })
         print(f"[*] Evento guardado en {config.ARCHIVO_PENDIENTES}")
+        return None
 
 def guardar_sin_verificar(nombre, ruta, hash_actual, error):
     """Sin acceso a la baseline no se sabe si el cambio es legítimo: se guarda la evidencia y no se restaura."""
@@ -154,7 +161,10 @@ def guardar_sin_verificar(nombre, ruta, hash_actual, error):
     print(f"[+] Evidencia en {ruta_cuarentena} y evento guardado en {config.ARCHIVO_PENDIENTES}")
 
 def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por=None):
-    """El contenido está intacto pero cambiaron los permisos o el dueño: se registra y se reponen."""
+    """El contenido está intacto pero cambiaron los permisos o el dueño: se registra y se reponen.
+
+    Devuelve (resultado, id del evento registrado).
+    """
     cambios = []
     if permisos != baseline["permisos"]:
         cambios.append(f"Permisos: {baseline['permisos']} -> {permisos}.")
@@ -163,14 +173,15 @@ def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_po
     detalle = " ".join(cambios)
 
     # Si viene de restaurar.py, la detección ya la registró el monitor
+    evento_id = None
     if aprobado_por is None:
-        log_to_db(nombre, ruta, h, PERMISOS, detalle, hash_anterior=baseline["hash"])
+        evento_id = log_to_db(nombre, ruta, h, PERMISOS, detalle, hash_anterior=baseline["hash"])
         print(f"[!] ALERTA: Archivo PERMISOS -> {nombre}")
         print(f"Evidencia:\n{detalle}\n")
 
     if not se_restaura_ahora(aprobado_por):
         avisar_pendiente(ruta)
-        return PENDIENTE
+        return PENDIENTE, evento_id
 
     print("[*] Iniciando protocolo de Respuesta Automatizada...")
     resultado = NO_RESTAURADO
@@ -189,7 +200,7 @@ def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_po
     except Exception as e:
         print(f"[-] Error en la respuesta automatizada: {e}")
     print("-" * 50)
-    return resultado
+    return resultado, evento_id
 
 def se_restaura_ahora(aprobado_por):
     """En modo automático se restaura siempre; en modo aprobación, solo si alguien lo aprobó."""
@@ -207,7 +218,7 @@ def avisar_pendiente(ruta):
     print("-" * 50)
 
 def procesar(ruta, movido_a=None, movido_desde=None, aprobado_por=None):
-    """Compara un archivo con la baseline y, si hubo un cambio, lo registra y responde.
+    """Compara un archivo con la baseline y, si hubo un cambio, lo registra, responde y avisa a n8n.
 
     La llaman los eventos de watchdog y el escaneo inicial: el evento es solo el disparador.
     movido_a y movido_desde solo agregan contexto cuando el disparador fue un movimiento.
@@ -215,124 +226,132 @@ def procesar(ruta, movido_a=None, movido_desde=None, aprobado_por=None):
     Devuelve qué pasó: SIN_CAMBIOS, RESTAURADO, PENDIENTE, NO_RESTAURADO, CREADO o SIN_VERIFICAR.
     """
     with candado:
-        # La baseline guarda rutas absolutas
-        ruta = os.path.abspath(ruta)
-        nombre = os.path.basename(ruta)
+        resultado, evento_id = _procesar(os.path.abspath(ruta), movido_a, movido_desde, aprobado_por)
 
-        # Temporales de editores y de nuestra propia restauración: no se vigilan
-        if es_ignorado(ruta):
-            return SIN_CAMBIOS
+    # El aviso sale después de responder: no suma tiempo a la detección ni a la restauración
+    if evento_id is not None:
+        notificador.notificar({"tipo": "evento", "evento_id": evento_id, "resultado": resultado})
+    return resultado
 
-        # None si el archivo no está en disco
-        h = get_sha256(ruta)
+def _procesar(ruta, movido_a, movido_desde, aprobado_por):
+    """Hace el trabajo de procesar(). Devuelve (resultado, id del evento registrado o None)."""
+    nombre = os.path.basename(ruta)
 
-        if h is None and os.path.lexists(ruta):
-            if os.path.isfile(ruta):
-                print(f"[!] No se pudo leer {ruta}: no se puede verificar.")
-            return SIN_VERIFICAR
+    # Temporales de editores y de nuestra propia restauración: no se vigilan
+    if es_ignorado(ruta):
+        return SIN_CAMBIOS, None
 
-        owner, permisos = leer_owner_y_permisos(ruta)
+    # None si el archivo no está en disco
+    h = get_sha256(ruta)
 
-        # La verdad está en la baseline de la BD
-        try:
-            estado, baseline = verificar(ruta, h, owner, permisos)
-        except Exception as e:
-            print(f"[!] ALERTA: no se pudo consultar la baseline para verificar {nombre}: {e}")
-            print("    Sin baseline no se restaura. Revisá que PostgreSQL esté levantado.")
-            guardar_sin_verificar(nombre, ruta, h, e)
-            return SIN_VERIFICAR
+    if h is None and os.path.lexists(ruta):
+        if os.path.isfile(ruta):
+            print(f"[!] No se pudo leer {ruta}: no se puede verificar.")
+        return SIN_VERIFICAR, None
 
-        if estado == SIN_CAMBIOS:
-            avisados.pop(ruta, None)
-            return SIN_CAMBIOS
+    owner, permisos = leer_owner_y_permisos(ruta)
 
-        # En modo aprobación el archivo queda alterado hasta que alguien aprueba:
-        # el mismo cambio se registra una sola vez
-        if not se_restaura_ahora(aprobado_por) and estado != CREADO:
-            if avisados.get(ruta) == (estado, h, owner, permisos):
-                return PENDIENTE
-            avisados[ruta] = (estado, h, owner, permisos)
+    # La verdad está en la baseline de la BD
+    try:
+        estado, baseline = verificar(ruta, h, owner, permisos)
+    except Exception as e:
+        print(f"[!] ALERTA: no se pudo consultar la baseline para verificar {nombre}: {e}")
+        print("    Sin baseline no se restaura. Revisá que PostgreSQL esté levantado.")
+        guardar_sin_verificar(nombre, ruta, h, e)
+        return SIN_VERIFICAR, None
 
-        if estado == PERMISOS:
-            return responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por)
+    if estado == SIN_CAMBIOS:
+        avisados.pop(ruta, None)
+        return SIN_CAMBIOS, None
 
-        if estado == CREADO and aprobado_por is not None:
-            print(f"[-] {ruta} no está en la baseline: no hay nada que restaurar.")
-            return CREADO
+    # En modo aprobación el archivo queda alterado hasta que alguien aprueba:
+    # el mismo cambio se registra una sola vez
+    if not se_restaura_ahora(aprobado_por) and estado != CREADO:
+        if avisados.get(ruta) == (estado, h, owner, permisos):
+            return PENDIENTE, None
+        avisados[ruta] = (estado, h, owner, permisos)
 
-        hash_baseline = baseline["hash"] if baseline else None
+    if estado == PERMISOS:
+        return responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por)
 
-        # Un archivo de la baseline que falta porque lo movieron se registra como MOVIDO
-        evento = MOVIDO if estado == ELIMINADO and movido_a else estado
+    if estado == CREADO and aprobado_por is not None:
+        print(f"[-] {ruta} no está en la baseline: no hay nada que restaurar.")
+        return CREADO, None
 
-        respaldo = boveda.ruta_en_boveda(ruta)
+    hash_baseline = baseline["hash"] if baseline else None
 
-        # Solo se restaura si la copia de la bóveda sigue siendo la de la baseline
-        restaurable = estado != CREADO and respaldo_confiable(ruta, hash_baseline)
+    # Un archivo de la baseline que falta porque lo movieron se registra como MOVIDO
+    evento = MOVIDO if estado == ELIMINADO and movido_a else estado
 
-        # La evidencia: qué pasó y, si se modificó el contenido, el Diff exacto
+    respaldo = boveda.ruta_en_boveda(ruta)
+
+    # Solo se restaura si la copia de la bóveda sigue siendo la de la baseline
+    restaurable = estado != CREADO and respaldo_confiable(ruta, hash_baseline)
+
+    # La evidencia: qué pasó y, si se modificó el contenido, el Diff exacto
+    if estado == CREADO:
+        texto_diff = "Archivo que no está en la baseline vigente."
+        if movido_desde:
+            texto_diff += f" Llegó movido desde {movido_desde}."
+    elif evento == MOVIDO:
+        texto_diff = f"El archivo de la baseline fue movido a {movido_a}."
+    elif estado == ELIMINADO:
+        texto_diff = "El archivo de la baseline fue eliminado."
+    elif restaurable:
+        texto_diff = calcular_diff(respaldo, ruta)
+    else:
+        texto_diff = ""
+    if estado != CREADO and not restaurable:
+        texto_diff = (texto_diff + " BÓVEDA NO CONFIABLE: la copia de respaldo falta o no coincide "
+                      "con la baseline. No se restaura.").strip()
+
+    # Solo hay algo para guardar en cuarentena si el archivo está en disco
+    ruta_cuarentena = nueva_ruta_cuarentena(nombre) if h is not None else None
+
+    # Si viene de restaurar.py, la detección ya la registró el monitor
+    evento_id = None
+    if aprobado_por is None:
+        evento_id = log_to_db(nombre, ruta, h, evento, texto_diff,
+                              hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
+        print(f"[!] ALERTA: Archivo {evento} -> {nombre}")
+        print(f"Evidencia:\n{texto_diff}\n")
+
+    # --- INICIO RESPUESTA AUTOMATIZADA ---
+    print("[*] Iniciando protocolo de Respuesta Automatizada...")
+
+    resultado = NO_RESTAURADO
+    try:
         if estado == CREADO:
-            texto_diff = "Archivo que no está en la baseline vigente."
-            if movido_desde:
-                texto_diff += f" Llegó movido desde {movido_desde}."
-        elif evento == MOVIDO:
-            texto_diff = f"El archivo de la baseline fue movido a {movido_a}."
-        elif estado == ELIMINADO:
-            texto_diff = "El archivo de la baseline fue eliminado."
-        elif restaurable:
-            texto_diff = calcular_diff(respaldo, ruta)
+            # Archivo que no está en la baseline: se aísla y no hay nada que restaurar.
+            # Es automático en los dos modos: es una contención y se puede deshacer.
+            shutil.move(ruta, ruta_cuarentena)
+            print(f"[+] AISLAMIENTO EXITOSO: Archivo fuera de la baseline movido a {ruta_cuarentena}")
+            resultado = CREADO
         else:
-            texto_diff = ""
-        if estado != CREADO and not restaurable:
-            texto_diff = (texto_diff + " BÓVEDA NO CONFIABLE: la copia de respaldo falta o no coincide "
-                          "con la baseline. No se restaura.").strip()
+            if h is not None:
+                # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia)
+                shutil.copy2(ruta, ruta_cuarentena)
+                print(f"[+] AISLAMIENTO EXITOSO: Evidencia copiada a {ruta_cuarentena}")
 
-        # Solo hay algo para guardar en cuarentena si el archivo está en disco
-        ruta_cuarentena = nueva_ruta_cuarentena(nombre) if h is not None else None
-
-        # Si viene de restaurar.py, la detección ya la registró el monitor
-        if aprobado_por is None:
-            log_to_db(nombre, ruta, h, evento, texto_diff,
-                      hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
-            print(f"[!] ALERTA: Archivo {evento} -> {nombre}")
-            print(f"Evidencia:\n{texto_diff}\n")
-
-        # --- INICIO RESPUESTA AUTOMATIZADA ---
-        print("[*] Iniciando protocolo de Respuesta Automatizada...")
-
-        resultado = NO_RESTAURADO
-        try:
-            if estado == CREADO:
-                # Archivo que no está en la baseline: se aísla y no hay nada que restaurar.
-                # Es automático en los dos modos: es una contención y se puede deshacer.
-                shutil.move(ruta, ruta_cuarentena)
-                print(f"[+] AISLAMIENTO EXITOSO: Archivo fuera de la baseline movido a {ruta_cuarentena}")
-                resultado = CREADO
+            if not restaurable:
+                print("[-] NO SE RESTAURA: la bóveda no coincide con la baseline. Requiere revisión manual.")
+            elif not se_restaura_ahora(aprobado_por):
+                avisar_pendiente(ruta)
+                return PENDIENTE, evento_id
             else:
-                if h is not None:
-                    # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia)
-                    shutil.copy2(ruta, ruta_cuarentena)
-                    print(f"[+] AISLAMIENTO EXITOSO: Evidencia copiada a {ruta_cuarentena}")
+                # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
+                boveda.restaurar(ruta)
+                log_to_db(nombre, ruta, get_sha256(ruta), RESTAURADO,
+                          f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por),
+                          hash_anterior=h, ruta_cuarentena=ruta_cuarentena)
+                print(f"[+] RESTAURACIÓN EXITOSA: El archivo original ha sido recuperado.")
+                resultado = RESTAURADO
+        print("-" * 50)
 
-                if not restaurable:
-                    print("[-] NO SE RESTAURA: la bóveda no coincide con la baseline. Requiere revisión manual.")
-                elif not se_restaura_ahora(aprobado_por):
-                    avisar_pendiente(ruta)
-                    return PENDIENTE
-                else:
-                    # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
-                    boveda.restaurar(ruta)
-                    log_to_db(nombre, ruta, get_sha256(ruta), RESTAURADO,
-                              f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por),
-                              hash_anterior=h, ruta_cuarentena=ruta_cuarentena)
-                    print(f"[+] RESTAURACIÓN EXITOSA: El archivo original ha sido recuperado.")
-                    resultado = RESTAURADO
-            print("-" * 50)
-
-        except Exception as e:
-            print(f"[-] Error en la respuesta automatizada: {e}")
-        # --- FIN RESPUESTA AUTOMATIZADA ---
-        return resultado
+    except Exception as e:
+        print(f"[-] Error en la respuesta automatizada: {e}")
+    # --- FIN RESPUESTA AUTOMATIZADA ---
+    return resultado, evento_id
 
 def revisar_directorio(directorio):
     """Verifica todos los archivos de la baseline que estaban dentro de un directorio borrado o movido."""

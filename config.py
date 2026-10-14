@@ -51,3 +51,7 @@ PATRONES_IGNORADOS = leer_patrones(os.getenv("PATRONES_IGNORADOS") or "*.swp,*.s
 #               una persona con restaurar.py (o n8n, después de la aprobación).
 MODOS_RESTAURACION = ("automatica", "aprobacion")
 MODO_RESTAURACION = (os.getenv("MODO_RESTAURACION") or "automatica").strip().lower()
+
+# Aviso push a n8n después de cada evento. Vacío = no se avisa (el monitor funciona igual).
+N8N_WEBHOOK_URL = (os.getenv("N8N_WEBHOOK_URL") or "").strip()
+N8N_WEBHOOK_SECRETO = os.getenv("N8N_WEBHOOK_SECRETO") or ""

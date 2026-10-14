@@ -7,6 +7,7 @@ import pytest
 import boveda
 import config
 import monitor_fim
+import notificador
 from hashes import get_sha256
 from metadatos import leer_owner_y_permisos
 
@@ -19,6 +20,7 @@ class EntornoMonitor:
         self.baseline = {}   # ruta -> {hash, permisos, owner}, hace de baseline_vigente
         self.eventos = []    # lo que el monitor habría insertado en la BD
         self.bd_caida = False
+        self.avisos = []     # lo que el monitor le habría mandado a n8n
         os.makedirs(self.directorio)
         os.makedirs(config.DIRECTORIO_CUARENTENA)
 
@@ -78,10 +80,12 @@ class EntornoMonitor:
     def registrar(self, nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff="",
                   hash_anterior=None, ruta_cuarentena=None):
         self.eventos.append({
+            "id": len(self.eventos) + 1,
             "nombre_archivo": nombre_archivo, "ruta_completa": ruta_completa, "hash_sha256": hash_sha256,
             "evento": evento, "detalles_diff": detalles_diff, "hash_anterior": hash_anterior,
             "ruta_cuarentena": ruta_cuarentena,
         })
+        return len(self.eventos)
 
 
 @pytest.fixture(autouse=True)
@@ -94,6 +98,7 @@ def configuracion_aislada(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ARCHIVO_PENDIENTES", str(tmp_path / "logs" / "eventos_pendientes.jsonl"))
     monkeypatch.setattr(config, "PATRONES_IGNORADOS", ["*.swp", "*.swo", "*.swx", "*~", "*.tmp"])
     monkeypatch.setattr(config, "MODO_RESTAURACION", "automatica")
+    monkeypatch.setattr(config, "N8N_WEBHOOK_URL", "")
     monitor_fim.avisados.clear()
 
 
@@ -103,4 +108,5 @@ def entorno_monitor(monkeypatch):
     monkeypatch.setattr(monitor_fim, "obtener_baseline", entorno.obtener_baseline)
     monkeypatch.setattr(monitor_fim, "rutas_de_la_baseline", entorno.rutas_de_la_baseline)
     monkeypatch.setattr(monitor_fim, "log_to_db", entorno.registrar)
+    monkeypatch.setattr(notificador, "notificar", entorno.avisos.append)
     return entorno
