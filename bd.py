@@ -1,8 +1,14 @@
+import threading
+
 import psycopg2
 import config
 
 # Única conexión del proceso: se abre la primera vez que hace falta
 _conexion = None
+
+# El monitor usa la conexión desde dos hilos (eventos y decisiones): de a uno por vez.
+# Quien necesite varias consultas en una misma transacción también lo toma.
+candado = threading.RLock()
 
 def conectar():
     """Devuelve la conexión a la BD. La abre la primera vez y la reabre si se cerró."""
@@ -27,6 +33,10 @@ def ejecutar(query, parametros=None):
 
     Si la conexión se cayó (por ejemplo, se reinició PostgreSQL), reconecta y reintenta una vez.
     """
+    with candado:
+        return _ejecutar(query, parametros)
+
+def _ejecutar(query, parametros):
     for intento in (1, 2):
         try:
             conn = conectar()

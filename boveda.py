@@ -25,15 +25,24 @@ def respaldar(ruta, boveda=None):
 
 def restaurar(ruta, boveda=None):
     """Repone el archivo desde la bóveda. Lanza FileNotFoundError si no hay respaldo."""
-    respaldo = ruta_en_boveda(ruta, boveda)
+    reponer_desde(ruta_en_boveda(ruta, boveda), ruta)
+
+def reponer_desde(origen, ruta):
+    """Copia origen sobre ruta (bytes, permisos y fechas) sin que el archivo quede a medio escribir."""
     carpeta, nombre = os.path.split(os.path.abspath(ruta))
     os.makedirs(carpeta, exist_ok=True)
 
     # Se copia a un temporal en la misma carpeta y se renombra encima del original:
     # el renombrado es atómico, así que el archivo nunca falta ni queda a medio escribir.
     temporal = os.path.join(carpeta, PREFIJO_TEMPORAL + nombre)
-    shutil.copy2(respaldo, temporal)
+    shutil.copy2(origen, temporal)
     os.replace(temporal, ruta)
+
+def quitar(ruta, boveda=None):
+    """Borra el respaldo de un archivo que salió de la baseline (si lo había)."""
+    respaldo = ruta_en_boveda(ruta, boveda)
+    if os.path.isfile(respaldo):
+        os.remove(respaldo)
 
 def limpiar_huerfanos(directorio, rutas_vigentes, boveda=None):
     """Borra de la bóveda los respaldos de ese directorio que ya no están en la baseline vigente."""

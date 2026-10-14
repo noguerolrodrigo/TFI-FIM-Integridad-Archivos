@@ -22,6 +22,8 @@ class EntornoMonitor:
         self.bd_caida = False
         self.avisos = []     # lo que el monitor le habría mandado a n8n
         self.ventanas = []   # (id, ruta) de las ventanas de mantenimiento abiertas
+        self.ejecuciones = []   # (decision_id, resultado, detalle) que habría registrado el monitor
+        self.versiones = 0
         os.makedirs(self.directorio)
         os.makedirs(config.DIRECTORIO_CUARENTENA)
 
@@ -39,6 +41,30 @@ class EntornoMonitor:
         owner, permisos = leer_owner_y_permisos(ruta)
         self.baseline[ruta] = {"hash": get_sha256(ruta), "permisos": permisos, "owner": owner}
         return ruta
+
+    def decision(self, evento_id, decision, decidido_por="rodrigo", canal="telegram", decision_id=1):
+        """Arma la decisión tal como la devuelve decisiones_pendientes()."""
+        evento = next(e for e in self.eventos if e["id"] == evento_id)
+        owner, permisos = evento["owner_permisos"]
+        return {"id": decision_id, "decision": decision, "decidido_por": decidido_por, "canal": canal,
+                "evento_id": evento_id, "evento": evento["evento"], "ruta": evento["ruta_completa"],
+                "hash": evento["hash_sha256"], "permisos": permisos, "owner": owner,
+                "ruta_cuarentena": evento["ruta_cuarentena"]}
+
+    def actualizar_archivo(self, ruta, motivo):
+        """Hace de generar_baseline.actualizar_archivo: la baseline nueva solo cambia este archivo."""
+        self.versiones += 1
+        if os.path.isfile(ruta):
+            owner, permisos = leer_owner_y_permisos(ruta)
+            self.baseline[ruta] = {"hash": get_sha256(ruta), "permisos": permisos, "owner": owner}
+            boveda.respaldar(ruta)
+        else:
+            self.baseline.pop(ruta, None)
+            boveda.quitar(ruta)
+        return self.versiones
+
+    def registrar_ejecucion(self, decision_id, resultado, detalle):
+        self.ejecuciones.append((decision_id, resultado, detalle))
 
     def hash_baseline(self, ruta):
         return self.baseline[ruta]["hash"]
@@ -85,6 +111,8 @@ class EntornoMonitor:
             "nombre_archivo": nombre_archivo, "ruta_completa": ruta_completa, "hash_sha256": hash_sha256,
             "evento": evento, "detalles_diff": detalles_diff, "hash_anterior": hash_anterior,
             "ruta_cuarentena": ruta_cuarentena,
+            # lo que log_to_db lee del disco al registrar
+            "owner_permisos": leer_owner_y_permisos(ruta_completa),
         })
         return len(self.eventos)
 
@@ -101,6 +129,7 @@ def configuracion_aislada(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "MODO_RESTAURACION", "automatica")
     monkeypatch.setattr(config, "N8N_WEBHOOK_URL", "")
     monitor_fim.avisados.clear()
+    monitor_fim.decisiones_ejecutadas.clear()
 
 
 @pytest.fixture
@@ -110,5 +139,7 @@ def entorno_monitor(monkeypatch):
     monkeypatch.setattr(monitor_fim, "rutas_de_la_baseline", entorno.rutas_de_la_baseline)
     monkeypatch.setattr(monitor_fim, "log_to_db", entorno.registrar)
     monkeypatch.setattr(monitor_fim, "ventanas_vigentes", lambda: list(entorno.ventanas))
+    monkeypatch.setattr(monitor_fim, "registrar_ejecucion", entorno.registrar_ejecucion)
+    monkeypatch.setattr(monitor_fim.generar_baseline, "actualizar_archivo", entorno.actualizar_archivo)
     monkeypatch.setattr(notificador, "notificar", entorno.avisos.append)
     return entorno

@@ -20,7 +20,7 @@ MENSAJES = {
 
 def restaurar(ruta):
     """Restaura el archivo dejando registrado quién lo aprobó. Devuelve 0 si quedó como en la baseline."""
-    resultado = monitor_fim.procesar(os.path.abspath(ruta), aprobado_por=getpass.getuser())
+    resultado = monitor_fim.procesar(os.path.abspath(ruta), aprobado_por=f"{getpass.getuser()} (restaurar.py)")
     print(MENSAJES[resultado])
     return 0 if resultado in (monitor_fim.RESTAURADO, monitor_fim.SIN_CAMBIOS) else 1
 

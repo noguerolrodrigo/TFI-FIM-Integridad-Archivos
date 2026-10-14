@@ -66,7 +66,7 @@ def test_restaurar_py_restaura_y_deja_constancia_de_quien_aprobo(entorno_monitor
     assert get_sha256(ruta) == entorno_monitor.hash_baseline(ruta)
     assert entorno_monitor.tipos_de_evento() == ["MODIFICADO", "RESTAURADO"]
     restaurado = entorno_monitor.eventos[1]
-    assert "aprobación manual de analista" in restaurado["detalles_diff"]
+    assert "aprobación de analista (restaurar.py)" in restaurado["detalles_diff"]
     assert restaurado["hash_anterior"] == hash_alterado
 
 

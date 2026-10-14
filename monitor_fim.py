@@ -10,6 +10,7 @@ from watchdog.events import FileSystemEventHandler
 import bd
 import boveda
 import config
+import generar_baseline
 import notificador
 import pendientes
 from filtros import es_ignorado
@@ -36,9 +37,23 @@ AUTORIZADO = "AUTORIZADO"          # cambio dentro de una ventana de mantenimien
 # cada vez que llega otro evento del mismo archivo. ruta -> (estado, hash, owner, permisos)
 avisados = {}
 
-# El escaneo inicial y los eventos de watchdog corren en hilos distintos:
-# el candado hace que los archivos se procesen de a uno
-candado = threading.Lock()
+# El escaneo inicial, los eventos de watchdog y las decisiones que llegan de n8n corren en hilos
+# distintos: el candado hace que los archivos se procesen de a uno. Es reentrante porque ejecutar
+# una decisión de restaurar vuelve a pasar por procesar().
+candado = threading.RLock()
+
+# Decisiones humanas (las inserta n8n en la tabla decisiones; el monitor las ejecuta)
+INCIDENTE = "INCIDENTE"      # ya restaurado: fue un incidente, no se hace nada más
+RESTAURAR = "RESTAURAR"      # pendiente: restaurar desde la bóveda
+ACEPTAR = "ACEPTAR"          # pendiente: el cambio pasa a la baseline
+# AUTORIZADO (ya restaurado, pero era un cambio autorizado) hace lo mismo que ACEPTAR
+EVENTOS_DECIDIBLES = {MODIFICADO, CREADO, ELIMINADO, MOVIDO, PERMISOS}
+
+# Cada cuánto se buscan decisiones nuevas en la BD (segundos)
+INTERVALO_DECISIONES = 2
+
+# Decisiones ya ejecutadas por este proceso, por si no se pudo registrar la ejecución en la BD
+decisiones_ejecutadas = set()
 
 def leer_archivo_texto(ruta):
     """Lee las líneas de un archivo de texto. Devuelve None si es binario o no se puede leer."""
@@ -229,7 +244,7 @@ def firma_de_aprobacion(aprobado_por):
     """Texto que deja constancia de quién aprobó la restauración (vacío en modo automático)."""
     if aprobado_por is None:
         return "."
-    return f", con aprobación manual de {aprobado_por} (restaurar.py)."
+    return f", con aprobación de {aprobado_por}."
 
 def avisar_pendiente(ruta):
     print("[*] PENDIENTE DE APROBACIÓN: no se restaura. Para restaurar, ejecutá:")
@@ -405,6 +420,109 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     # --- FIN RESPUESTA AUTOMATIZADA ---
     return resultado, evento_id
 
+def decisiones_pendientes():
+    """Devuelve las decisiones de la tabla decisiones que todavía no tienen fila en ejecuciones."""
+    filas = bd.ejecutar("""
+        SELECT d.id, d.decision, d.decidido_por, d.canal,
+               r.id, r.evento, r.ruta_completa, r.hash_sha256, r.permisos, r.owner_archivo, r.ruta_cuarentena
+        FROM decisiones d
+        JOIN registros_archivos r ON r.id = d.evento_id
+        LEFT JOIN ejecuciones e ON e.decision_id = d.id
+        WHERE e.id IS NULL
+        ORDER BY d.id
+    """)
+    campos = ["id", "decision", "decidido_por", "canal", "evento_id", "evento", "ruta", "hash",
+              "permisos", "owner", "ruta_cuarentena"]
+    return [dict(zip(campos, fila)) for fila in filas]
+
+def registrar_ejecucion(decision_id, resultado, detalle):
+    bd.ejecutar("INSERT INTO ejecuciones (decision_id, resultado, detalle) VALUES (%s, %s, %s)",
+                (decision_id, resultado, detalle))
+
+def aceptar_cambio(d):
+    """El estado que vio la persona pasa a ser la baseline de ese archivo (y solo de ese).
+
+    Devuelve (resultado, detalle).
+    """
+    ruta = d["ruta"]
+    if d["evento"] in (MODIFICADO, CREADO):
+        # Se repone exactamente la versión que se mostró en la alerta: la copia de cuarentena
+        copia = d["ruta_cuarentena"]
+        if not copia or get_sha256(copia) != d["hash"]:
+            return "RECHAZADA", "La copia de cuarentena falta o no coincide con el hash del evento: no se acepta."
+        boveda.reponer_desde(copia, ruta)
+    elif d["evento"] in (ELIMINADO, MOVIDO):
+        if os.path.lexists(ruta):
+            os.remove(ruta)
+    elif d["evento"] == PERMISOS:
+        os.chmod(ruta, int(d["permisos"], 8))
+        if leer_owner_y_permisos(ruta)[0] != d["owner"]:
+            # Cambiar el dueño de un archivo solo lo puede hacer root
+            os.chown(ruta, int(d["owner"]), -1)
+
+    motivo = (f"Cambio aceptado por {d['decidido_por']} ({d['canal']}), "
+              f"decisión #{d['id']} sobre el evento #{d['evento_id']}.")
+    version = generar_baseline.actualizar_archivo(ruta, motivo)
+    return "EJECUTADA", f"Baseline versión {version}: {motivo}"
+
+def _ejecutar_decision(d):
+    """Valida la decisión y la aplica. Devuelve (resultado, detalle)."""
+    if not any(config.dentro_de(d["ruta"], directorio) for directorio in config.RUTAS_MONITOREADAS):
+        return "RECHAZADA", "El archivo está fuera de las rutas monitoreadas."
+    if d["evento"] not in EVENTOS_DECIDIBLES:
+        return "RECHAZADA", f"No se puede decidir sobre un evento {d['evento']}."
+
+    if d["decision"] == INCIDENTE:
+        return "EJECUTADA", "Cerrado como incidente: el archivo queda como en la baseline."
+
+    if d["decision"] == RESTAURAR:
+        resultado, _ = _procesar(d["ruta"], None, None, f"{d['decidido_por']} ({d['canal']})")
+        if resultado in (RESTAURADO, SIN_CAMBIOS):
+            return "EJECUTADA", "El archivo quedó como en la baseline."
+        return "ERROR", f"No se pudo restaurar (resultado: {resultado})."
+
+    if d["decision"] in (ACEPTAR, AUTORIZADO):
+        return aceptar_cambio(d)
+
+    return "RECHAZADA", f"Decisión desconocida: {d['decision']}."
+
+def ejecutar_decision(d):
+    """Ejecuta una decisión, deja constancia en ejecuciones y avisa a n8n para que confirme."""
+    print(f"[*] Decisión #{d['id']}: {d['decision']} sobre el evento #{d['evento_id']} ({d['ruta']}), "
+          f"de {d['decidido_por']} por {d['canal']}.")
+    with candado:
+        try:
+            resultado, detalle = _ejecutar_decision(d)
+        except Exception as e:
+            resultado, detalle = "ERROR", str(e)
+    decisiones_ejecutadas.add(d["id"])
+    print(f"    {resultado}: {detalle}")
+
+    try:
+        registrar_ejecucion(d["id"], resultado, detalle)
+    except Exception as e:
+        print(f"[!] No se pudo registrar la ejecución de la decisión #{d['id']}: {e}")
+    notificador.notificar({"tipo": "ejecucion", "decision_id": d["id"], "evento_id": d["evento_id"],
+                           "resultado": resultado})
+    return resultado
+
+def vigilar_decisiones(detener):
+    """Hilo que cada INTERVALO_DECISIONES segundos busca decisiones nuevas y las ejecuta."""
+    ultimo_error = None
+    while not detener.wait(INTERVALO_DECISIONES):
+        try:
+            pendientes = decisiones_pendientes()
+            ultimo_error = None
+        except Exception as e:
+            # Se avisa una vez y no cada 2 segundos
+            if str(e) != ultimo_error:
+                print(f"[!] No se pudieron consultar las decisiones: {e}")
+                ultimo_error = str(e)
+            continue
+        for d in pendientes:
+            if d["id"] not in decisiones_ejecutadas:
+                ejecutar_decision(d)
+
 def revisar_directorio(directorio):
     """Verifica todos los archivos de la baseline que estaban dentro de un directorio borrado o movido."""
     directorio = os.path.abspath(directorio)
@@ -511,13 +629,17 @@ if __name__ == "__main__":
 
     # Primero se empieza a escuchar y después se escanea: así no queda ninguna ventana sin cubrir
     observer.start()
+    detener = threading.Event()
     try:
         escaneo_inicial()
+        threading.Thread(target=vigilar_decisiones, args=(detener,), daemon=True).start()
+        print(f"[*] Esperando decisiones de n8n (cada {INTERVALO_DECISIONES} s).")
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n[*] Motor FIM detenido.")
     finally:
+        detener.set()
         observer.stop()
         observer.join()
         bd.cerrar()

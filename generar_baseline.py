@@ -77,5 +77,48 @@ def generar_baseline():
     except Exception as e:
         print(f"[!] Error: {e}")
 
+def actualizar_archivo(ruta, motivo):
+    """Genera una versión nueva de la baseline donde solo cambia este archivo.
+
+    Las demás filas vigentes se copian tal cual a la versión nueva; el archivo entra con su estado
+    actual, o sale de la baseline si ya no existe. Así, aceptar un cambio no acepta de rebote otro
+    cambio pendiente en otro archivo. Devuelve el número de la versión nueva.
+    """
+    ruta = os.path.abspath(ruta)
+    with bd.candado:
+        conn = bd.conectar()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COALESCE(MAX(version_baseline), 0) + 1 FROM registros_archivos "
+                               "WHERE evento = 'BASELINE'")
+                version = cursor.fetchone()[0]
+
+                cursor.execute("""
+                    INSERT INTO registros_archivos
+                    (nombre_archivo, ruta_completa, hash_sha256, evento, owner_archivo, permisos, version_baseline)
+                    SELECT nombre_archivo, ruta_completa, hash_sha256, 'BASELINE', owner_archivo, permisos, %s
+                    FROM baseline_vigente WHERE ruta_completa <> %s
+                """, (version, ruta))
+
+                if os.path.isfile(ruta):
+                    owner, permisos = leer_owner_y_permisos(ruta)
+                    cursor.execute("""
+                        INSERT INTO registros_archivos
+                        (nombre_archivo, ruta_completa, hash_sha256, evento, owner_archivo, permisos,
+                         version_baseline, detalles_diff)
+                        VALUES (%s, %s, %s, 'BASELINE', %s, %s, %s, %s)
+                    """, (os.path.basename(ruta), ruta, get_sha256(ruta), owner, permisos, version, motivo))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+    # La bóveda acompaña a la baseline: copia nueva del archivo, o se borra si salió
+    if os.path.isfile(ruta):
+        boveda.respaldar(ruta)
+    else:
+        boveda.quitar(ruta)
+    return version
+
 if __name__ == "__main__":
     generar_baseline()
