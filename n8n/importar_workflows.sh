@@ -5,6 +5,7 @@
 # Hay que correrlo con n8n DETENIDO y después de crear en la UI las credenciales "Telegram FIM" y
 # "Postgres FIM (fim_n8n)" (ver n8n/README.md). Los JSON del repo no tienen ids de credenciales:
 # este script busca esas credenciales por nombre y les pone el id que tienen en esta instalación.
+# Tampoco tienen el sufijo secreto del webhook de Telegram: lo toma de TELEGRAM_WEBHOOK_SUFIJO del .env.
 #
 set -euo pipefail
 
@@ -31,9 +32,12 @@ TEMPORAL="$(mktemp -d)"
 trap 'rm -rf "$TEMPORAL"' EXIT
 
 # Pone los ids de las credenciales (solo lee id, nombre y tipo; nunca los datos cifrados)
-python3 - "$BASE_SQLITE" "$PROYECTO/n8n" "$TEMPORAL" <<'PY'
+# y el sufijo del webhook de Telegram
+python3 - "$BASE_SQLITE" "$PROYECTO/n8n" "$TEMPORAL" "$PROYECTO/.env" <<'PY'
 import json, pathlib, sqlite3, sys
 base, origen, destino = sys.argv[1], pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3])
+entorno = dict(l.rstrip("\r\n").split("=", 1) for l in open(sys.argv[4], encoding="utf-8") if "=" in l)
+sufijo = entorno.get("TELEGRAM_WEBHOOK_SUFIJO", "")
 conexion = sqlite3.connect(f"file:{base}?mode=ro", uri=True)
 credenciales = {(nombre, tipo): id_ for id_, nombre, tipo in
                 conexion.execute("SELECT id, name, type FROM credentials_entity")}
@@ -47,7 +51,12 @@ for archivo in sorted(origen.glob("*.json")):
                 credencial["id"] = credenciales[clave]
             else:
                 faltan.add(clave)
-    (destino / archivo.name).write_text(json.dumps(workflow, ensure_ascii=False), encoding="utf-8")
+    texto = json.dumps(workflow, ensure_ascii=False)
+    if "__TELEGRAM_WEBHOOK_SUFIJO__" in texto:
+        if not sufijo:
+            sys.exit("[!] Falta TELEGRAM_WEBHOOK_SUFIJO en el .env (generarlo con: openssl rand -hex 16)")
+        texto = texto.replace("__TELEGRAM_WEBHOOK_SUFIJO__", sufijo)
+    (destino / archivo.name).write_text(texto, encoding="utf-8")
     print(workflow["id"], archivo.name)
 if faltan:
     sys.exit("[!] Faltan credenciales en n8n: " + ", ".join(f'"{n}" ({t})' for n, t in sorted(faltan)))

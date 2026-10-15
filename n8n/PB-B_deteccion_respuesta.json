@@ -210,7 +210,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Arma el texto de la alerta (HTML de Telegram) y las opciones según lo que hizo el monitor.\nconst e = $input.first().json;\nconst resultado = String($('Aviso del monitor').first().json.body.resultado || '');\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst corto = (h) => (h ? h.slice(0, 16) + '…' : '—');\nconst iconos = { MODIFICADO: '✏️', CREADO: '🆕', ELIMINADO: '🗑', MOVIDO: '📦', PERMISOS: '🔐' };\n\nconst autorizado = resultado === 'AUTORIZADO' || e.ventana_id !== null;\nlet estado;\nlet opciones;\nif (autorizado) {\n  estado = `🛠 Cambio autorizado por la ventana de mantenimiento #${e.ventana_id ?? '?'}: no se restauró. ¿Lo pasás a la baseline?`;\n  opciones = [['ACEPTAR', 'Pasar a la baseline'], ['RESTAURAR', 'Restaurar']];\n} else if (resultado === 'PENDIENTE') {\n  estado = '⏸ Pendiente de aprobación: el archivo sigue alterado.';\n  opciones = [['RESTAURAR', 'Restaurar'], ['ACEPTAR', 'Aceptar cambio']];\n} else if (resultado === 'RESTAURADO') {\n  estado = '✅ Restaurado automáticamente desde la bóveda.';\n  opciones = [['INCIDENTE', 'Fue un incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else if (resultado === 'CREADO') {\n  estado = '🧳 Archivo fuera de la baseline: se movió a cuarentena.';\n  opciones = [['INCIDENTE', 'Fue un incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else if (resultado === 'NO_RESTAURADO') {\n  estado = '⚠️ NO se pudo restaurar (bóveda no confiable o faltan permisos). Requiere revisión manual.';\n  opciones = [['INCIDENTE', 'Registrar como incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else {\n  estado = `Resultado informado por el monitor: ${esc(resultado) || 'desconocido'}.`;\n  opciones = [];\n}\n\nconst lineas = [\n  `${iconos[e.evento] || '❗'} <b>FIM: ${esc(e.evento)}</b> · ${esc(e.nombre_archivo)}`,\n  `<code>${esc(e.ruta_completa)}</code>`,\n  `🕒 ${esc(e.fecha)} · evento #${e.evento_id}`,\n  `Hash anterior: <code>${esc(corto(e.hash_anterior))}</code>`,\n  `Hash nuevo: <code>${esc(corto(e.hash_sha256))}</code>`,\n];\nif (e.evento === 'PERMISOS') lineas.push(`Permisos/propietario actuales: ${esc(e.permisos)} / uid ${esc(e.owner_archivo)}`);\nif (e.ruta_cuarentena) lineas.push(`Cuarentena: <code>${esc(e.ruta_cuarentena)}</code>`);\nlineas.push(Number(e.eventos_previos) > 0\n  ? `Historial: ${e.eventos_previos} evento(s) anterior(es) en este archivo, el último el ${esc(e.ultimo_previo)}.`\n  : 'Historial: es el primer evento de este archivo.');\nlineas.push('', estado);\n\n// Telegram acepta hasta 4096 caracteres: el diff se recorta para que el mensaje entre completo\nconst LIMITE_TELEGRAM = 4000;\nlet diff = esc(e.diff || '');\nlet recortado = !!e.diff_truncado;\n\n// Links locales para decidir desde la PC. Se arman siempre con localhost (aunque n8n tenga una URL\n// pública) y desde \"/webhook-waiting/\" en adelante, sin depender de cómo n8n deduzca su URL base.\n// Telegram no convierte en link las direcciones a localhost: van en <code> para copiarlas.\nconst datos = $('Datos de la ejecución').first().json;\nconst espera = String(datos.resume_url);\nconst desde = espera.indexOf('/webhook-waiting/');\nconst urlEspera = String(datos.url_local).replace(/\\/+$/, '') +\n  (desde >= 0 ? espera.slice(desde) : espera.replace(/^https?:\\/\\/[^/]+/, ''));\nconst separador = urlEspera.includes('?') ? '&' : '?';\nconst links = opciones.map(([decision, etiqueta]) => {\n  const u = `${urlEspera}${separador}decision=${encodeURIComponent(decision)}`;\n  return `• <b>${esc(etiqueta)}</b>:\\n<code>${esc(u)}</code>`;\n});\nconst pie = links.length\n  ? ['', '<b>Para decidir</b>, copiá un link y abrilo en el navegador de la PC (vale 24 h):', ...links]\n  : [];\nconst resto = [...lineas, ...pie].join('\\n').length + 40;\nif (resto + diff.length > LIMITE_TELEGRAM) {\n  diff = diff.slice(0, Math.max(0, LIMITE_TELEGRAM - resto)).replace(/&[a-z]*$/, '');\n  recortado = true;\n}\nif (diff) lineas.push('', `<pre>${diff}${recortado ? '\\n… (recortado; completo en la BD)' : ''}</pre>`);\nlineas.push(...pie);\n\nreturn [{ json: {\n  evento_id: e.evento_id,\n  evento: e.evento,\n  nombre_archivo: e.nombre_archivo,\n  autorizado,\n  tipo_aviso: autorizado ? 'informativo' : 'alerta',\n  opciones: opciones.map(([decision, etiqueta]) => ({ decision, etiqueta })),\n  texto: lineas.join('\\n'),\n} }];\n"
+        "jsCode": "// Arma el texto de la alerta (HTML de Telegram) y las opciones según lo que hizo el monitor.\nconst e = $input.first().json;\nconst resultado = String($('Aviso del monitor').first().json.body.resultado || '');\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst corto = (h) => (h ? h.slice(0, 16) + '…' : '—');\nconst iconos = { MODIFICADO: '✏️', CREADO: '🆕', ELIMINADO: '🗑', MOVIDO: '📦', PERMISOS: '🔐' };\n\nconst autorizado = resultado === 'AUTORIZADO' || e.ventana_id !== null;\nlet estado;\nlet opciones;\nif (autorizado) {\n  estado = `🛠 Cambio autorizado por la ventana de mantenimiento #${e.ventana_id ?? '?'}: no se restauró. ¿Lo pasás a la baseline?`;\n  opciones = [['ACEPTAR', 'Pasar a la baseline'], ['RESTAURAR', 'Restaurar']];\n} else if (resultado === 'PENDIENTE') {\n  estado = '⏸ Pendiente de aprobación: el archivo sigue alterado.';\n  opciones = [['RESTAURAR', 'Restaurar'], ['ACEPTAR', 'Aceptar cambio']];\n} else if (resultado === 'RESTAURADO') {\n  estado = '✅ Restaurado automáticamente desde la bóveda.';\n  opciones = [['INCIDENTE', 'Fue un incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else if (resultado === 'CREADO') {\n  estado = '🧳 Archivo fuera de la baseline: se movió a cuarentena.';\n  opciones = [['INCIDENTE', 'Fue un incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else if (resultado === 'NO_RESTAURADO') {\n  estado = '⚠️ NO se pudo restaurar (bóveda no confiable o faltan permisos). Requiere revisión manual.';\n  opciones = [['INCIDENTE', 'Registrar como incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else {\n  estado = `Resultado informado por el monitor: ${esc(resultado) || 'desconocido'}.`;\n  opciones = [['INCIDENTE', 'Registrar como incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n}\n\nconst lineas = [\n  `${iconos[e.evento] || '❗'} <b>FIM: ${esc(e.evento)}</b> · ${esc(e.nombre_archivo)}`,\n  `<code>${esc(e.ruta_completa)}</code>`,\n  `🕒 ${esc(e.fecha)} · evento #${e.evento_id}`,\n  `Hash anterior: <code>${esc(corto(e.hash_anterior))}</code>`,\n  `Hash nuevo: <code>${esc(corto(e.hash_sha256))}</code>`,\n];\nif (e.evento === 'PERMISOS') lineas.push(`Permisos/propietario actuales: ${esc(e.permisos)} / uid ${esc(e.owner_archivo)}`);\nif (e.ruta_cuarentena) lineas.push(`Cuarentena: <code>${esc(e.ruta_cuarentena)}</code>`);\nlineas.push(Number(e.eventos_previos) > 0\n  ? `Historial: ${e.eventos_previos} evento(s) anterior(es) en este archivo, el último el ${esc(e.ultimo_previo)}.`\n  : 'Historial: es el primer evento de este archivo.');\nlineas.push('', estado);\n\n// Telegram acepta hasta 4096 caracteres: el diff se recorta para que el mensaje entre completo\nconst LIMITE_TELEGRAM = 4000;\nlet diff = esc(e.diff || '');\nlet recortado = !!e.diff_truncado;\n\n// Links locales para decidir desde la PC. Se arman siempre con localhost (aunque n8n tenga una URL\n// pública) y desde \"/webhook-waiting/\" en adelante, sin depender de cómo n8n deduzca su URL base.\n// Telegram no convierte en link las direcciones a localhost: van en <code> para copiarlas.\nconst datos = $('Datos de la ejecución').first().json;\nconst espera = String(datos.resume_url);\nconst desde = espera.indexOf('/webhook-waiting/');\nconst urlEspera = String(datos.url_local).replace(/\\/+$/, '') +\n  (desde >= 0 ? espera.slice(desde) : espera.replace(/^https?:\\/\\/[^/]+/, ''));\nconst separador = urlEspera.includes('?') ? '&' : '?';\nconst links = opciones.map(([decision, etiqueta]) => {\n  const u = `${urlEspera}${separador}decision=${encodeURIComponent(decision)}`;\n  return `• <b>${esc(etiqueta)}</b>:\\n<code>${esc(u)}</code>`;\n});\nconst pie = links.length\n  ? ['', '<b>Para decidir</b>, tocá un botón o, desde la PC, copiá un link y abrilo en el navegador (vale 24 h):', ...links]\n  : [];\nconst resto = [...lineas, ...pie].join('\\n').length + 40;\nif (resto + diff.length > LIMITE_TELEGRAM) {\n  diff = diff.slice(0, Math.max(0, LIMITE_TELEGRAM - resto)).replace(/&[a-z]*$/, '');\n  recortado = true;\n}\nif (diff) lineas.push('', `<pre>${diff}${recortado ? '\\n… (recortado; completo en la BD)' : ''}</pre>`);\nlineas.push(...pie);\n\nreturn [{ json: {\n  evento_id: e.evento_id,\n  evento: e.evento,\n  nombre_archivo: e.nombre_archivo,\n  autorizado,\n  tipo_aviso: autorizado ? 'informativo' : 'alerta',\n  opciones: opciones.map(([decision, etiqueta]) => ({ decision, etiqueta })),\n  texto: lineas.join('\\n'),\n} }];\n"
       },
       "id": "709c6bbe-26f9-54d9-98bc-a538a110e0e2",
       "name": "Armar mensaje",
@@ -263,6 +263,29 @@
           "appendAttribution": false,
           "parse_mode": "HTML",
           "disable_web_page_preview": true
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "={{ $json.opciones[0].etiqueta }}",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.opciones[0].decision + ':' + $json.evento_id }}"
+                    }
+                  },
+                  {
+                    "text": "={{ $json.opciones[1].etiqueta }}",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.opciones[1].decision + ':' + $json.evento_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       },
       "id": "8a12e9b3-c2c7-55b8-aa8e-389030855633",
@@ -288,6 +311,29 @@
           "appendAttribution": false,
           "parse_mode": "HTML",
           "disable_web_page_preview": true
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "={{ $json.opciones[0].etiqueta }}",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.opciones[0].decision + ':' + $json.evento_id }}"
+                    }
+                  },
+                  {
+                    "text": "={{ $json.opciones[1].etiqueta }}",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.opciones[1].decision + ':' + $json.evento_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       },
       "id": "03963550-1ba0-5dda-a4e6-f942f6dd0c6f",
@@ -445,7 +491,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        3300,
+        3740,
         300
       ],
       "credentials": {
@@ -673,6 +719,63 @@
           "name": "Telegram FIM"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT EXISTS (SELECT 1 FROM decisiones WHERE evento_id = $1) AS decidido",
+        "options": {
+          "queryReplacement": "={{ [ $('Leer decisión').first().json.evento_id ] }}"
+        }
+      },
+      "id": "70ffaa2e-6a62-5b6a-ba28-9c85f22ca44a",
+      "name": "¿Se decidió por otro canal?",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3300,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__CRED_POSTGRES__",
+          "name": "Postgres FIM (fim_n8n)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "02d51417-9bfc-58a8-8c1e-3c3096d20c6d",
+              "leftValue": "={{ !$json.decidido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "abdac1ca-e1c8-51cc-8b03-b897532b213d",
+      "name": "¿Sigue sin decisión?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3520,
+        300
+      ]
     }
   ],
   "connections": {
@@ -873,7 +976,7 @@
         ],
         [
           {
-            "node": "Aviso sin decisión",
+            "node": "¿Se decidió por otro canal?",
             "type": "main",
             "index": 0
           }
@@ -943,6 +1046,28 @@
         [
           {
             "node": "Aviso de ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se decidió por otro canal?": {
+      "main": [
+        [
+          {
+            "node": "¿Sigue sin decisión?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sigue sin decisión?": {
+      "main": [
+        [
+          {
+            "node": "Aviso sin decisión",
             "type": "main",
             "index": 0
           }

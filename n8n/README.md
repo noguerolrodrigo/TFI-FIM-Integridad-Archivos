@@ -73,6 +73,7 @@ Para que el monitor avise a n8n, el `.env` tiene que tener
 | Archivo | Qué hace |
 |---|---|
 | `PB-B_deteccion_respuesta.json` | Recibe el aviso del monitor, valida el secreto, lee el evento y su historial de la BD, manda la alerta por Telegram con el diff y espera la decisión con links locales (van como texto para copiar: Telegram no linkea `localhost`). También confirma por Telegram cuando el monitor ejecutó la decisión. |
+| `PB-B_decision_telegram.json` | Recibe los toques de los botones de Telegram (llegan por ngrok), valida el `secret_token` y la cuenta, y registra la decisión. |
 | `PB-A_baseline_autorizada.json` | Formulario en <http://localhost:5678/form/fim-ventana> para abrir una ventana de mantenimiento. Pide sesión iniciada en n8n y registra quién la abrió. |
 | `respaldo_notificaciones.json` | Cada minuto reenvía a PB-B los eventos de la última hora que quedaron sin notificar (por ejemplo, si n8n estaba apagado). |
 
@@ -84,10 +85,41 @@ Para que el monitor avise a n8n, el `.env` tiene que tener
 | dejó el archivo esperando (modo aprobación) | *Restaurar* / *Aceptar cambio* |
 | registró un cambio dentro de una ventana de mantenimiento | *Pasar a la baseline* / *Restaurar* |
 
-Los links van como texto para copiar y pegar en el navegador de la PC (Telegram no linkea
-`localhost`), valen 24 h y llevan una firma que genera n8n,
-así que no se pueden adivinar. Se puede decidir una sola vez por evento: la BD rechaza una segunda
-decisión.
+Hay dos formas de decidir, y la BD acepta una sola decisión por evento (la segunda se rechaza):
+
+- **Botones de Telegram**, desde cualquier lado (necesitan el túnel ngrok, ver abajo).
+- **Links locales**, como respaldo si el túnel no está: van como texto para copiar y pegar en el
+  navegador de la PC (Telegram no linkea `localhost`), valen 24 h y llevan una firma de n8n.
+
+## 5. Botones de Telegram desde cualquier lado (ngrok)
+
+Telegram tiene que poder avisarle a n8n cuando tocás un botón, así que hace falta una URL pública.
+Se usa el dominio gratuito de ngrok, y el túnel deja pasar **una sola ruta**:
+`POST /webhook/telegram-<sufijo>` (ver `ngrok_politica.yml`). Todo lo demás se corta en ngrok.
+
+Una sola vez:
+
+```bash
+# ngrok ya viene del repositorio apt oficial; cargar el authtoken sin que quede en pantalla:
+read -rsp "Authtoken de ngrok: " NGROK_TOKEN; echo; ngrok config add-authtoken "$NGROK_TOKEN"; unset NGROK_TOKEN
+```
+
+Cada vez que se quiera usar los botones, con n8n corriendo:
+
+```bash
+./n8n/iniciar_ngrok.sh                 # terminal aparte; deja el túnel abierto
+./n8n/registrar_webhook_telegram.sh    # le dice a Telegram adónde mandar los toques
+```
+
+Para volver a solo links locales: cerrar el túnel y `./n8n/registrar_webhook_telegram.sh --borrar`.
+
+Qué se verifica en cada toque:
+
+1. El header `X-Telegram-Bot-Api-Secret-Token` tiene que coincidir con `TELEGRAM_WEBHOOK_SECRETO`
+   (si no, 403 y no se procesa nada).
+2. El toque tiene que venir de la cuenta de `TELEGRAM_CHAT_ID`. Si viene de otra, se ignora (sin
+   respuesta) y queda registrado en `accesos_rechazados`.
+3. La opción tiene que tener el formato esperado (`DECISION:evento_id`).
 
 ## Seguridad
 
@@ -95,6 +127,8 @@ decisión.
 - El webhook del monitor exige el header `X-FIM-Secreto` (si no coincide, responde 403) y solo
   recibe el id del evento: el contenido de la alerta sale siempre de la BD.
 - El rol `fim_n8n` solo puede leer y agregar filas en sus tablas (migración 06).
+- Desde internet solo existe la ruta del webhook de Telegram, con un sufijo aleatorio y el
+  `secret_token`. El editor de n8n además exige la cuenta de usuario.
 
 Los secretos que usan los workflows se leen de variables de entorno (`$env`) que pone
 `iniciar_n8n.sh`; las credenciales se referencian por nombre.
