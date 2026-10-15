@@ -1,0 +1,235 @@
+{
+  "id": "FimPBAventanas01",
+  "name": "PB-A Ventana de mantenimiento (FIM)",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "n8nUserAuth",
+        "requireExecuteAccess": true,
+        "formTitle": "FIM: abrir una ventana de mantenimiento",
+        "formDescription": "Mientras la ventana esté abierta, el monitor registra los cambios de esa ruta pero no los restaura. Cada cambio te llega por Telegram para pasarlo a la baseline.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Ruta",
+              "placeholder": "/home/usuario/proyecto_fim/directorio_prueba",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Motivo",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Duración (minutos)",
+              "fieldType": "number",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "path": "fim-ventana",
+          "includeUserInOutput": true,
+          "appendAttribution": false,
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Pedido recibido. La confirmación te llega por Telegram."
+            }
+          }
+        }
+      },
+      "id": "752a411d-8b4c-5f00-8c1e-af0db9114196",
+      "name": "Formulario: abrir ventana",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "2660b7f2-6731-5f6e-b7a3-ac1a80f7c567"
+    },
+    {
+      "parameters": {
+        "jsCode": "const f = $input.first().json;\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst ruta = String(f['Ruta'] || '').trim().replace(/\\/+$/, '') || '/';\nconst motivo = String(f['Motivo'] || '').trim();\n// Con \"n8n User Auth\" el formulario trae el usuario logueado: es quien autoriza\nconst usuario = f.user || f.formUser || {};\nconst responsable = String(usuario.email || usuario.firstName || '').trim();\nconst minutos = Number(f['Duración (minutos)']);\nlet error = '';\nif (!ruta.startsWith('/')) error = 'la ruta tiene que ser absoluta.';\nelse if (ruta.split('/').includes('..')) error = 'la ruta no puede tener \"..\".';\nelse if (ruta === '/') error = 'no se puede abrir una ventana sobre todo el sistema.';\nelse if (!Number.isInteger(minutos) || minutos < 1 || minutos > 480) error = 'la duración tiene que ser de 1 a 480 minutos.';\nelse if (!motivo) error = 'falta el motivo.';\nelse if (!responsable) error = 'no se pudo identificar al usuario de n8n que pidió la ventana.';\nreturn [{ json: { valido: !error, error, ruta, motivo, responsable, minutos,\n  ruta_html: esc(ruta), motivo_html: esc(motivo), responsable_html: esc(responsable) } }];\n"
+      },
+      "id": "f50a20b3-04c5-508a-b4ac-ad019ae60e1c",
+      "name": "Validar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "306a3794-7321-5aaa-a876-595e185d2504",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5c9dfbd6-985b-5349-8b1a-d9f6fe99be2f",
+      "name": "¿Pedido válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ventanas_mantenimiento (ruta, motivo, autorizado_por, hasta) VALUES ($1, $2, $3, CURRENT_TIMESTAMP + make_interval(mins => $4)) RETURNING id, to_char(hasta AT TIME ZONE 'America/Argentina/Mendoza', 'DD/MM/YYYY HH24:MI') AS hasta",
+        "options": {
+          "queryReplacement": "={{ [ $json.ruta, $json.motivo, $json.responsable, $json.minutos ] }}"
+        }
+      },
+      "id": "bfd1789a-aa87-565d-80f0-a4d6e40bb141",
+      "name": "Guardar ventana",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        660,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__CRED_POSTGRES__",
+          "name": "Postgres FIM (fim_n8n)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🛠 <b>Ventana de mantenimiento #{{ $json.id }}</b> abierta hasta {{ $json.hasta }}\nRuta: <code>{{ $('Validar pedido').first().json.ruta_html }}</code>\nMotivo: {{ $('Validar pedido').first().json.motivo_html }}\nResponsable: {{ $('Validar pedido').first().json.responsable_html }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "e6163eaf-060a-5f0e-9089-f29ec1825d92",
+      "name": "Aviso de ventana abierta",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "__CRED_TELEGRAM__",
+          "name": "Telegram FIM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=⛔ Pedido de ventana rechazado: {{ $json.error }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "99b7f5fb-f1ef-5698-8d0e-248fdd3b3976",
+      "name": "Aviso de pedido rechazado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "__CRED_TELEGRAM__",
+          "name": "Telegram FIM"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Formulario: abrir ventana": {
+      "main": [
+        [
+          {
+            "node": "Validar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar pedido": {
+      "main": [
+        [
+          {
+            "node": "¿Pedido válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Pedido válido?": {
+      "main": [
+        [
+          {
+            "node": "Guardar ventana",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aviso de pedido rechazado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar ventana": {
+      "main": [
+        [
+          {
+            "node": "Aviso de ventana abierta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/Mendoza"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "fim"
+  },
+  "tags": []
+}

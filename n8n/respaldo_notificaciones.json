@@ -1,0 +1,108 @@
+{
+  "id": "FimRespaldoAvis1",
+  "name": "Respaldo de notificaciones (FIM)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "da7f9000-4733-5086-90e4-0c24edd8ad38",
+      "name": "Cada minuto",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT e.id AS evento_id,\n  CASE\n    WHEN e.detalles_diff LIKE 'Cambio autorizado por la ventana%' THEN 'AUTORIZADO'\n    WHEN e.evento = 'CREADO' THEN 'CREADO'\n    WHEN EXISTS (\n      SELECT 1 FROM registros_archivos r\n      WHERE r.evento = 'RESTAURADO' AND r.ruta_completa = e.ruta_completa AND r.id > e.id\n        AND NOT EXISTS (SELECT 1 FROM registros_archivos x\n                        WHERE x.ruta_completa = e.ruta_completa AND x.id > e.id AND x.id < r.id\n                          AND x.evento IN ('MODIFICADO', 'CREADO', 'ELIMINADO', 'MOVIDO', 'PERMISOS'))) THEN 'RESTAURADO'\n    WHEN e.detalles_diff LIKE '%BÓVEDA NO CONFIABLE%' THEN 'NO_RESTAURADO'\n    ELSE 'PENDIENTE'\n  END AS resultado\nFROM registros_archivos e\nWHERE e.evento IN ('MODIFICADO', 'CREADO', 'ELIMINADO', 'MOVIDO', 'PERMISOS')\n  AND e.fecha_registro > CURRENT_TIMESTAMP - interval '1 hour'\n  AND e.fecha_registro < CURRENT_TIMESTAMP - interval '1 minute'\n  AND NOT EXISTS (SELECT 1 FROM notificaciones n WHERE n.evento_id = e.id)\n  AND NOT EXISTS (SELECT 1 FROM decisiones d WHERE d.evento_id = e.id)\nORDER BY e.id\nLIMIT 20",
+        "options": {}
+      },
+      "id": "15e4c8d2-3b0c-5180-bf6e-22bdecaee955",
+      "name": "Eventos sin notificar",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        220,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__CRED_POSTGRES__",
+          "name": "Postgres FIM (fim_n8n)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FIM_URL_LOCAL }}/webhook/fim-evento",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-FIM-Secreto",
+              "value": "={{ $env.N8N_WEBHOOK_SECRETO }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tipo: 'evento', evento_id: $json.evento_id, resultado: $json.resultado, reenviado: true }) }}",
+        "options": {}
+      },
+      "id": "e06dab9e-34b0-557f-b7b3-5106193a8516",
+      "name": "Reenviar a PB-B",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Cada minuto": {
+      "main": [
+        [
+          {
+            "node": "Eventos sin notificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eventos sin notificar": {
+      "main": [
+        [
+          {
+            "node": "Reenviar a PB-B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/Mendoza"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "fim"
+  },
+  "tags": []
+}
