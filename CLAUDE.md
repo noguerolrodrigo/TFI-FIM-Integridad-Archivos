@@ -69,17 +69,22 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   `ventanas_mantenimiento`, `accesos_rechazados` y rol `fim_n8n` (solo SELECT e INSERT en sus tablas).
 - `n8n/`: `iniciar_n8n.sh` (n8n 2.41.4 con Node 24 de nvm, entorno limpio, datos en `~/n8n_fim`),
   `importar_workflows.sh`, `README.md` (instalación y configuración en el navegador) y los workflows
-  `PB-B_deteccion_respuesta.json`, `PB-A_baseline_autorizada.json`, `respaldo_notificaciones.json`.
-  n8n orquesta y decide; nunca toca archivos ni corre comandos.
+  `PB-B_deteccion_respuesta.json`, `PB-B_decision_telegram.json`, `PB-A_baseline_autorizada.json`,
+  `respaldo_notificaciones.json`. n8n orquesta y decide; nunca toca archivos ni corre comandos.
+- Botones de Telegram (extensión A): `n8n/iniciar_ngrok.sh` publica con el dominio gratuito de ngrok
+  solo `POST /webhook/telegram-<sufijo>` (`n8n/ngrok_politica.yml`); `n8n/registrar_webhook_telegram.sh`
+  registra el webhook con `secret_token`. El workflow valida el secreto y que el toque venga de
+  `TELEGRAM_CHAT_ID` (otras cuentas van a `accesos_rechazados`). El sufijo y los secretos están solo
+  en el `.env`.
 - `scripts/preparar_bd_pruebas.sh`: deja `fim_pruebas` con el esquema de `fim_db`, vacía.
 - `tests/`: pytest (`pytest` desde la raíz). Los del monitor usan una baseline en memoria
   (`tests/conftest.py`); los de conexión solo hacen SELECT y se saltean si PostgreSQL no está;
   `test_integracion_bd.py` usa `fim_pruebas`, nunca `fim_db`.
 - `.gitattributes` fija los saltos de línea en LF.
 - Plan de mejoras del motor en 12 commits (Paso 2) terminado el 13/10/2026.
-- Paso 3 (n8n): commits 1 a 8 hechos el 15/10/2026 (aprobación por link local). Falta la extensión
-  A (botones de Telegram + ngrok, obligatoria), y antes verificar qué permite la cuenta gratuita de
-  ngrok. Después sigue el Paso 4 (medición de MTTD/MTTR).
+- Paso 3 (n8n): commits 1 a 8 hechos el 15/10/2026 (link local) y extensión A (9a a 9d) el
+  16/10/2026, probada en laboratorio. Falta la prueba real desde el celular con datos móviles.
+  Después sigue el Paso 4 (medición de MTTD/MTTR).
 
 ## Limitaciones conocidas (declararlas en el informe)
 - **Evidencia incompleta en escrituras largas o en varios pasos.** El monitor reacciona al primer
@@ -109,6 +114,16 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - **Resultado reconstruido.** Cuando el respaldo reenvía un evento, deduce el resultado de la BD; un
   cambio de propietario que no se pudo reponer (sin root) aparece como pendiente.
 - **Espera de 24 h sin probar.** El aviso de "pasaron 24 h sin decisión" no se probó de punta a punta.
+- **Normalización de paths en ngrok.** La Traffic Policy se evalúa sobre el path normalizado y ngrok
+  reenvía el path original, así que variantes como `//webhook/...`, `/%2Fwebhook/...` o
+  `/./webhook/...` pasan el filtro (verificado el 16/10/2026 con un servidor descartable; también
+  `req.url` viene normalizada). Evidencia de que no expone datos: contra n8n, esas variantes con POST
+  dan 404 o caen en el mismo webhook de Telegram (que exige el `secret_token`); con GET devuelven solo
+  la página HTML vacía del editor, sin datos de la instancia, y el editor no puede funcionar porque
+  `/rest`, `/assets` y `/static` siguen bloqueados. Mitigación: la única ruta permitida lleva un
+  sufijo aleatorio de 32 caracteres, así que hay que adivinarlo para llegar siquiera a esa página.
+- **Plan gratuito de ngrok.** Depende de un tercero y de sus límites (20 000 pedidos y 1 GB al mes);
+  si el túnel no está, los botones no funcionan y queda el link local.
 
 ## Stack
 - Python 3 + venv: watchdog 6, psycopg2-binary, python-dotenv (ver requirements.txt)
