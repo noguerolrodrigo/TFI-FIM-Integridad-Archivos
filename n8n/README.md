@@ -52,5 +52,48 @@ La versión de n8n está fijada a propósito: los workflows exportados se probar
 
 Los nombres tienen que ser exactamente esos: los workflows buscan las credenciales por nombre.
 
+## 4. Importar los workflows
+
+Con n8n **detenido** (Ctrl+C en la terminal donde corre):
+
+```bash
+./n8n/importar_workflows.sh
+./n8n/iniciar_n8n.sh
+```
+
+El script importa los JSON de esta carpeta, les pone el id que tienen en tu instalación las
+credenciales del paso 3 (las busca por nombre; nunca lee sus datos) y los publica. Al arrancar,
+n8n tarda unos segundos más en activar los webhooks.
+
+Para que el monitor avise a n8n, el `.env` tiene que tener
+`N8N_WEBHOOK_URL=http://localhost:5678/webhook/fim-evento`.
+
+## Workflows
+
+| Archivo | Qué hace |
+|---|---|
+| `PB-B_deteccion_respuesta.json` | Recibe el aviso del monitor, valida el secreto, lee el evento y su historial de la BD, manda la alerta por Telegram con el diff y espera la decisión con links locales. También confirma por Telegram cuando el monitor ejecutó la decisión. |
+| `PB-A_baseline_autorizada.json` | Formulario en <http://localhost:5678/form/fim-ventana> para abrir una ventana de mantenimiento. Pide sesión iniciada en n8n y registra quién la abrió. |
+| `respaldo_notificaciones.json` | Cada minuto reenvía a PB-B los eventos de la última hora que quedaron sin notificar (por ejemplo, si n8n estaba apagado). |
+
+### Qué opciones trae cada alerta
+
+| El monitor... | Opciones |
+|---|---|
+| restauró solo (modo automático) o aisló un archivo nuevo | *Fue un incidente* / *Era un cambio autorizado* |
+| dejó el archivo esperando (modo aprobación) | *Restaurar* / *Aceptar cambio* |
+| registró un cambio dentro de una ventana de mantenimiento | *Pasar a la baseline* / *Restaurar* |
+
+Los links solo funcionan desde la PC (`localhost`), valen 24 h y llevan una firma que genera n8n,
+así que no se pueden adivinar. Se puede decidir una sola vez por evento: la BD rechaza una segunda
+decisión.
+
+## Seguridad
+
+- n8n no corre comandos ni toca archivos: inserta la decisión y la ejecuta el monitor.
+- El webhook del monitor exige el header `X-FIM-Secreto` (si no coincide, responde 403) y solo
+  recibe el id del evento: el contenido de la alerta sale siempre de la BD.
+- El rol `fim_n8n` solo puede leer y agregar filas en sus tablas (migración 06).
+
 Los secretos que usan los workflows se leen de variables de entorno (`$env`) que pone
 `iniciar_n8n.sh`; las credenciales se referencian por nombre.

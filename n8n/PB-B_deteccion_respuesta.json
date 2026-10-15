@@ -1,0 +1,963 @@
+{
+  "id": "FimPBBdeteccion1",
+  "name": "PB-B Detección y respuesta (FIM)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fim-evento",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a8545e56-4a24-50f9-8237-78c466976446",
+      "name": "Aviso del monitor",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "7587e761-75eb-56df-b94e-0075398f8f0b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b6844083-c276-5b90-a1ea-2eea29f72b93",
+              "leftValue": "={{ !!$env.N8N_WEBHOOK_SECRETO && $json.headers['x-fim-secreto'] === $env.N8N_WEBHOOK_SECRETO }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ee865c74-ee15-5ba7-9c20-d34b11159a03",
+      "name": "¿Secreto válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "secreto inválido",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "603fc023-55c6-52e3-89e7-d83a4641b44f",
+      "name": "Rechazar (403)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "ok",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a0bc3fcc-8c11-5abe-ab4f-1800308c7141",
+      "name": "Recibido (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "73f38c7c-7115-54d1-915a-129dd5ff0e79",
+              "leftValue": "={{ $('Aviso del monitor').first().json.body.tipo === 'ejecucion' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "99278f81-be40-577e-b32a-a4d4b797fa76",
+      "name": "¿Es una ejecución?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT e.id AS evento_id, e.evento, e.nombre_archivo, e.ruta_completa,\n       e.hash_anterior, e.hash_sha256, e.ruta_cuarentena, e.permisos, e.owner_archivo,\n       left(coalesce(e.detalles_diff, ''), 3000) AS diff,\n       length(coalesce(e.detalles_diff, '')) > 3000 AS diff_truncado,\n       to_char(e.fecha_registro AT TIME ZONE 'America/Argentina/Mendoza', 'DD/MM/YYYY HH24:MI:SS') AS fecha,\n       (SELECT count(*) FROM registros_archivos h\n         WHERE h.ruta_completa = e.ruta_completa AND h.evento IN ('MODIFICADO', 'CREADO', 'ELIMINADO', 'MOVIDO', 'PERMISOS') AND h.id < e.id) AS eventos_previos,\n       (SELECT to_char(max(h.fecha_registro) AT TIME ZONE 'America/Argentina/Mendoza', 'DD/MM/YYYY HH24:MI') FROM registros_archivos h\n         WHERE h.ruta_completa = e.ruta_completa AND h.evento IN ('MODIFICADO', 'CREADO', 'ELIMINADO', 'MOVIDO', 'PERMISOS') AND h.id < e.id) AS ultimo_previo,\n       (SELECT v.id FROM ventanas_mantenimiento v\n         WHERE e.fecha_registro >= v.desde AND e.fecha_registro < v.hasta\n           AND (e.ruta_completa = v.ruta OR starts_with(e.ruta_completa, rtrim(v.ruta, '/') || '/'))\n         ORDER BY v.id DESC LIMIT 1) AS ventana_id,\n       EXISTS (SELECT 1 FROM notificaciones n WHERE n.evento_id = e.id) AS ya_notificado,\n       EXISTS (SELECT 1 FROM decisiones d WHERE d.evento_id = e.id) AS ya_decidido\nFROM registros_archivos e\nWHERE e.id = $1 AND e.evento IN ('MODIFICADO', 'CREADO', 'ELIMINADO', 'MOVIDO', 'PERMISOS')",
+        "options": {
+          "queryReplacement": "={{ [ parseInt($('Aviso del monitor').first().json.body.evento_id, 10) ] }}"
+        }
+      },
+      "id": "0c0c2065-d43d-54ed-8845-dad40706a542",
+      "name": "Leer evento e historial",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        880,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__CRED_POSTGRES__",
+          "name": "Postgres FIM (fim_n8n)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4b862ed4-0067-5133-b193-6086fb93541b",
+              "leftValue": "={{ !$json.ya_notificado && !$json.ya_decidido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5fbab817-0553-56a3-a352-c0c7eabfccb5",
+      "name": "¿Sin avisar todavía?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1100,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ca655aae-cfc4-527b-bf42-e96f71ca810d",
+              "name": "url_local",
+              "value": "={{ $env.FIM_URL_LOCAL }}",
+              "type": "string"
+            },
+            {
+              "id": "ffe252d3-577c-5ec5-842b-cb6bdcea9bac",
+              "name": "resume_url",
+              "value": "={{ $execution.resumeUrl }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "82e82201-626b-5bfa-9326-16b07a1f3e43",
+      "name": "Datos de la ejecución",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1320,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Arma el texto de la alerta (HTML de Telegram) y las opciones según lo que hizo el monitor.\nconst e = $input.first().json;\nconst resultado = String($('Aviso del monitor').first().json.body.resultado || '');\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst corto = (h) => (h ? h.slice(0, 16) + '…' : '—');\nconst iconos = { MODIFICADO: '✏️', CREADO: '🆕', ELIMINADO: '🗑', MOVIDO: '📦', PERMISOS: '🔐' };\n\nconst autorizado = resultado === 'AUTORIZADO' || e.ventana_id !== null;\nlet estado;\nlet opciones;\nif (autorizado) {\n  estado = `🛠 Cambio autorizado por la ventana de mantenimiento #${e.ventana_id ?? '?'}: no se restauró. ¿Lo pasás a la baseline?`;\n  opciones = [['ACEPTAR', 'Pasar a la baseline'], ['RESTAURAR', 'Restaurar']];\n} else if (resultado === 'PENDIENTE') {\n  estado = '⏸ Pendiente de aprobación: el archivo sigue alterado.';\n  opciones = [['RESTAURAR', 'Restaurar'], ['ACEPTAR', 'Aceptar cambio']];\n} else if (resultado === 'RESTAURADO') {\n  estado = '✅ Restaurado automáticamente desde la bóveda.';\n  opciones = [['INCIDENTE', 'Fue un incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else if (resultado === 'CREADO') {\n  estado = '🧳 Archivo fuera de la baseline: se movió a cuarentena.';\n  opciones = [['INCIDENTE', 'Fue un incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else if (resultado === 'NO_RESTAURADO') {\n  estado = '⚠️ NO se pudo restaurar (bóveda no confiable o faltan permisos). Requiere revisión manual.';\n  opciones = [['INCIDENTE', 'Registrar como incidente'], ['AUTORIZADO', 'Era un cambio autorizado']];\n} else {\n  estado = `Resultado informado por el monitor: ${esc(resultado) || 'desconocido'}.`;\n  opciones = [];\n}\n\nconst lineas = [\n  `${iconos[e.evento] || '❗'} <b>FIM: ${esc(e.evento)}</b> · ${esc(e.nombre_archivo)}`,\n  `<code>${esc(e.ruta_completa)}</code>`,\n  `🕒 ${esc(e.fecha)} · evento #${e.evento_id}`,\n  `Hash anterior: <code>${esc(corto(e.hash_anterior))}</code>`,\n  `Hash nuevo: <code>${esc(corto(e.hash_sha256))}</code>`,\n];\nif (e.evento === 'PERMISOS') lineas.push(`Permisos/propietario actuales: ${esc(e.permisos)} / uid ${esc(e.owner_archivo)}`);\nif (e.ruta_cuarentena) lineas.push(`Cuarentena: <code>${esc(e.ruta_cuarentena)}</code>`);\nlineas.push(Number(e.eventos_previos) > 0\n  ? `Historial: ${e.eventos_previos} evento(s) anterior(es) en este archivo, el último el ${esc(e.ultimo_previo)}.`\n  : 'Historial: es el primer evento de este archivo.');\nlineas.push('', estado);\n\n// Telegram acepta hasta 4096 caracteres: el diff se recorta para que el mensaje entre completo\nconst LIMITE_TELEGRAM = 4000;\nlet diff = esc(e.diff || '');\nlet recortado = !!e.diff_truncado;\n\n// Links locales para decidir desde la PC (se arman con localhost aunque n8n tenga una URL pública)\nconst datos = $('Datos de la ejecución').first().json;\nconst urlEspera = String(datos.resume_url).replace(/^https?:\\/\\/[^/]+/, String(datos.url_local).replace(/\\/+$/, ''));\nconst separador = urlEspera.includes('?') ? '&' : '?';\nconst links = opciones.map(([decision, etiqueta]) => {\n  const u = `${urlEspera}${separador}decision=${encodeURIComponent(decision)}`;\n  return `• <a href=\"${esc(u)}\">${esc(etiqueta)}</a>`;\n});\nconst pie = links.length ? ['', '<b>Decidir desde la PC</b> (links válidos 24 h):', ...links] : [];\nconst resto = [...lineas, ...pie].join('\\n').length + 40;\nif (resto + diff.length > LIMITE_TELEGRAM) {\n  diff = diff.slice(0, Math.max(0, LIMITE_TELEGRAM - resto)).replace(/&[a-z]*$/, '');\n  recortado = true;\n}\nif (diff) lineas.push('', `<pre>${diff}${recortado ? '\\n… (recortado; completo en la BD)' : ''}</pre>`);\nlineas.push(...pie);\n\nreturn [{ json: {\n  evento_id: e.evento_id,\n  evento: e.evento,\n  nombre_archivo: e.nombre_archivo,\n  autorizado,\n  tipo_aviso: autorizado ? 'informativo' : 'alerta',\n  opciones: opciones.map(([decision, etiqueta]) => ({ decision, etiqueta })),\n  texto: lineas.join('\\n'),\n} }];\n"
+      },
+      "id": "709c6bbe-26f9-54d9-98bc-a538a110e0e2",
+      "name": "Armar mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b7378205-68c6-52f1-b97c-c2f6bd6a08dd",
+              "leftValue": "={{ $json.autorizado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "34806402-07f4-532d-b952-b51f6e78b629",
+      "name": "¿Cambio autorizado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1760,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.texto }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "8a12e9b3-c2c7-55b8-aa8e-389030855633",
+      "name": "Aviso de cambio autorizado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "__CRED_TELEGRAM__",
+          "name": "Telegram FIM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.texto }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "03963550-1ba0-5dda-a4e6-f942f6dd0c6f",
+      "name": "Alerta de integridad",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "__CRED_TELEGRAM__",
+          "name": "Telegram FIM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO notificaciones (evento_id, canal, detalle) VALUES ($1, 'telegram', $2)",
+        "options": {
+          "queryReplacement": "={{ [ $('Armar mensaje').first().json.evento_id, $('Armar mensaje').first().json.tipo_aviso ] }}"
+        }
+      },
+      "id": "edb60afb-18e4-5722-89aa-ef2ff97656a2",
+      "name": "Registrar notificación",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2200,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__CRED_POSTGRES__",
+          "name": "Postgres FIM (fim_n8n)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a08925ac-6678-59a6-af79-6dba058a7857",
+              "leftValue": "={{ $('Armar mensaje').first().json.opciones.length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0d8f6c3c-ea79-5f45-8dd5-d9a2b3dcc422",
+      "name": "¿Hay que decidir?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2420,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "GET",
+        "responseMode": "responseNode",
+        "limitWaitTime": true,
+        "limitType": "afterTimeInterval",
+        "resumeAmount": 24,
+        "resumeUnit": "hours",
+        "options": {}
+      },
+      "id": "d08c6389-4de9-5078-a2f0-39625bf9144d",
+      "name": "Esperar decisión (link local)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2640,
+        100
+      ],
+      "webhookId": "4958c136-ee32-518d-8623-6aa9991423d2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// La persona abrió uno de los links (o se cumplieron las 24 h sin respuesta).\nconst m = $('Armar mensaje').first().json;\nconst q = $input.first().json.query || {};\nconst decision = String(q.decision || '');\nconst opcion = m.opciones.find((o) => o.decision === decision);\nreturn [{ json: {\n  evento_id: m.evento_id,\n  decision,\n  respondio: decision !== '',\n  valida: !!opcion,\n  etiqueta: opcion ? opcion.etiqueta : '',\n  texto_sin_respuesta: `⌛ Pasaron 24 h sin decisión sobre el evento #${m.evento_id} (${m.nombre_archivo}). ` +\n    'Queda como lo dejó el monitor. Para restaurar a mano: python restaurar.py <ruta>.',\n} }];\n"
+      },
+      "id": "ade94414-01ba-5cd2-9734-d098c4598384",
+      "name": "Leer decisión",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "16c4ef99-ed20-5a2c-9b6f-77cd3d2ce7de",
+              "leftValue": "={{ $json.respondio }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7fbe0cbc-58d0-5691-9bc1-1c9e50bf4483",
+      "name": "¿Respondió?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3080,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $('Leer decisión').first().json.texto_sin_respuesta }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "512870d9-411a-58bf-bf4b-6bba42cff20c",
+      "name": "Aviso sin decisión",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3300,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "__CRED_TELEGRAM__",
+          "name": "Telegram FIM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1bb34fc2-9b44-560a-967c-940c63d512e1",
+              "leftValue": "={{ $json.valida }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c15ad836-a756-5817-908c-4b230c6009ee",
+      "name": "¿Opción válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>FIM</title><body style=\"font-family:sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem\"><h2>Opción no válida</h2><p>El link no corresponde a este evento.</p></body></html>",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "8864ba92-b2b6-5ec1-b506-8d83d38a983c",
+      "name": "Página: opción no válida",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3520,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO decisiones (evento_id, decision, decidido_por, canal) VALUES ($1, $2, 'operador local (PC)', 'link_local') RETURNING id",
+        "options": {
+          "queryReplacement": "={{ [ $('Leer decisión').first().json.evento_id, $('Leer decisión').first().json.decision ] }}"
+        }
+      },
+      "id": "b92e46be-1a69-526c-81d9-814cfbb35063",
+      "name": "Guardar decisión",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3520,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__CRED_POSTGRES__",
+          "name": "Postgres FIM (fim_n8n)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>FIM</title><body style=\"font-family:sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem\"><h2>✅ Decisión registrada</h2><p>{{ $('Leer decisión').first().json.etiqueta }}. El monitor la ejecuta en unos segundos y te avisa por Telegram.</p></body></html>",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "84564e17-9e3e-5911-9686-a312e155f792",
+      "name": "Página: decisión registrada",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3740,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>FIM</title><body style=\"font-family:sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem\"><h2>Ya había una decisión</h2><p>Este evento ya fue decidido (por este link o por Telegram).</p></body></html>",
+        "options": {
+          "responseCode": 409,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "f7fbd462-7ff5-561e-bf57-75612d402fef",
+      "name": "Página: ya decidido",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3740,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🗳 Decisión registrada desde la PC: <b>{{ $('Leer decisión').first().json.etiqueta }}</b> sobre el evento #{{ $('Leer decisión').first().json.evento_id }}. El monitor la ejecuta en unos segundos.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "c03a6d63-2b81-5f4d-8340-6c2f11ed5531",
+      "name": "Aviso de decisión registrada",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3960,
+        -200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "__CRED_TELEGRAM__",
+          "name": "Telegram FIM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT d.id AS decision_id, d.decision, d.decidido_por, d.canal,\n       x.resultado, x.detalle, r.id AS evento_id, r.evento, r.nombre_archivo, r.ruta_completa\nFROM ejecuciones x\nJOIN decisiones d ON d.id = x.decision_id\nJOIN registros_archivos r ON r.id = d.evento_id\nWHERE d.id = $1",
+        "options": {
+          "queryReplacement": "={{ [ parseInt($('Aviso del monitor').first().json.body.decision_id, 10) ] }}"
+        }
+      },
+      "id": "c2a959cb-679c-5127-894f-9a2bf021733b",
+      "name": "Leer ejecución",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        880,
+        360
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "__CRED_POSTGRES__",
+          "name": "Postgres FIM (fim_n8n)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const x = $input.first().json;\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst iconos = { EJECUTADA: '✅', RECHAZADA: '⛔', ERROR: '❌' };\nreturn [{ json: { texto: [\n  `${iconos[x.resultado] || 'ℹ️'} <b>Decisión ${esc(x.resultado)}</b>: ${esc(x.decision)} sobre ${esc(x.nombre_archivo)} (evento #${x.evento_id})`,\n  `Decidió: ${esc(x.decidido_por)} por ${esc(x.canal)}`,\n  esc(x.detalle),\n].join('\\n') } }];\n"
+      },
+      "id": "96282720-e50e-5be2-a7d3-5e777bb150bd",
+      "name": "Armar confirmación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.texto }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "ad5cfe39-96a9-5141-8e64-302d703d1432",
+      "name": "Aviso de ejecución",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        360
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "__CRED_TELEGRAM__",
+          "name": "Telegram FIM"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Aviso del monitor": {
+      "main": [
+        [
+          {
+            "node": "¿Secreto válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Secreto válido?": {
+      "main": [
+        [
+          {
+            "node": "Recibido (200)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rechazar (403)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recibido (200)": {
+      "main": [
+        [
+          {
+            "node": "¿Es una ejecución?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es una ejecución?": {
+      "main": [
+        [
+          {
+            "node": "Leer ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Leer evento e historial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer evento e historial": {
+      "main": [
+        [
+          {
+            "node": "¿Sin avisar todavía?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sin avisar todavía?": {
+      "main": [
+        [
+          {
+            "node": "Datos de la ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos de la ejecución": {
+      "main": [
+        [
+          {
+            "node": "Armar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar mensaje": {
+      "main": [
+        [
+          {
+            "node": "¿Cambio autorizado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Cambio autorizado?": {
+      "main": [
+        [
+          {
+            "node": "Aviso de cambio autorizado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alerta de integridad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aviso de cambio autorizado": {
+      "main": [
+        [
+          {
+            "node": "Registrar notificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alerta de integridad": {
+      "main": [
+        [
+          {
+            "node": "Registrar notificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar notificación": {
+      "main": [
+        [
+          {
+            "node": "¿Hay que decidir?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay que decidir?": {
+      "main": [
+        [
+          {
+            "node": "Esperar decisión (link local)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar decisión (link local)": {
+      "main": [
+        [
+          {
+            "node": "Leer decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer decisión": {
+      "main": [
+        [
+          {
+            "node": "¿Respondió?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Respondió?": {
+      "main": [
+        [
+          {
+            "node": "¿Opción válida?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aviso sin decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Opción válida?": {
+      "main": [
+        [
+          {
+            "node": "Guardar decisión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Página: opción no válida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar decisión": {
+      "main": [
+        [
+          {
+            "node": "Página: decisión registrada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Página: ya decidido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Página: decisión registrada": {
+      "main": [
+        [
+          {
+            "node": "Aviso de decisión registrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer ejecución": {
+      "main": [
+        [
+          {
+            "node": "Armar confirmación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar confirmación": {
+      "main": [
+        [
+          {
+            "node": "Aviso de ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/Mendoza"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "fim"
+  },
+  "tags": []
+}
