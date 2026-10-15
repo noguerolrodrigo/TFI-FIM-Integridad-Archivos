@@ -29,6 +29,8 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   dígito de setuid si lo hay). `filtros.py`: `PATRONES_IGNORADOS` y `es_ignorado()` (temporales de
   editores y de la restauración). Los tres los comparten la baseline y el monitor.
 - `pendientes.py`: log local `logs/eventos_pendientes.jsonl` para eventos que no llegaron a la BD.
+- `notificador.py`: después de cada evento, POST `{tipo, evento_id, resultado}` a `N8N_WEBHOOK_URL`
+  con el header `X-FIM-Secreto`, en un hilo aparte (timeout 2 s). Sin esa variable no avisa.
 - `monitor_fim.py`: watchdog sobre las rutas monitoreadas con `on_created`, `on_modified`,
   `on_deleted` y `on_moved`. Todos llaman a `procesar(ruta)`: el evento es solo el disparador y
   `verificar()` clasifica comparando el disco con `baseline_vigente` (hash, permisos y owner):
@@ -44,6 +46,12 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
     fila `RESTAURADO` quién aprobó. `CREADO` va a cuarentena en los dos modos.
   - Con la BD caída no restaura: copia la evidencia y deja el evento como `SIN_VERIFICAR` en el
     log local. Falta reinsertar esos eventos cuando vuelve la BD.
+  - **Ventanas de mantenimiento** (`ventanas_mantenimiento`): un cambio dentro de una ventana vigente
+    se registra con su diff y copia en cuarentena, pero no se restaura (resultado `AUTORIZADO`).
+  - **Ejecutor de decisiones**: un hilo lee cada 2 s la tabla `decisiones` (las inserta n8n) y las
+    ejecuta: `INCIDENTE` (nada), `RESTAURAR` (desde la bóveda), `ACEPTAR`/`AUTORIZADO` (la versión
+    que vio la persona pasa a la baseline de ese archivo solo, vía
+    `generar_baseline.actualizar_archivo()`). Registra en `ejecuciones` y avisa a n8n.
   Esta respuesta automatizada es posterior al informe de avance.
 - `sql/01_schema.sql`: esquema real exportado con pg_dump. La tabla tiene una columna `notificado`
   (boolean, default false) pensada para n8n que todavía no se usa.
@@ -57,11 +65,21 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   `sudo -u postgres psql -v ON_ERROR_STOP=1 -d fim_db < sql/05_permisos_minimos.sql`.
   Una vez aplicada, las migraciones nuevas también hay que correrlas como `postgres`, y `fim_user`
   ya no puede marcar `notificado` (para n8n: un rol aparte con UPDATE solo sobre esa columna).
+- `sql/06_orquestacion.sql`: tablas `notificaciones`, `decisiones` (una por evento), `ejecuciones`,
+  `ventanas_mantenimiento`, `accesos_rechazados` y rol `fim_n8n` (solo SELECT e INSERT en sus tablas).
+- `n8n/`: `iniciar_n8n.sh` (n8n 2.41.4 con Node 24 de nvm, entorno limpio, datos en `~/n8n_fim`),
+  `importar_workflows.sh`, `README.md` (instalación y configuración en el navegador) y los workflows
+  `PB-B_deteccion_respuesta.json`, `PB-A_baseline_autorizada.json`, `respaldo_notificaciones.json`.
+  n8n orquesta y decide; nunca toca archivos ni corre comandos.
+- `scripts/preparar_bd_pruebas.sh`: deja `fim_pruebas` con el esquema de `fim_db`, vacía.
 - `tests/`: pytest (`pytest` desde la raíz). Los del monitor usan una baseline en memoria
-  (`tests/conftest.py`); los de conexión solo hacen SELECT y se saltean si PostgreSQL no está.
+  (`tests/conftest.py`); los de conexión solo hacen SELECT y se saltean si PostgreSQL no está;
+  `test_integracion_bd.py` usa `fim_pruebas`, nunca `fim_db`.
 - `.gitattributes` fija los saltos de línea en LF.
-- Plan de mejoras del motor en 12 commits (Paso 2) terminado el 13/10/2026. Siguen el Paso 3
-  (orquestación con n8n) y el Paso 4 (medición de MTTD/MTTR y más pruebas).
+- Plan de mejoras del motor en 12 commits (Paso 2) terminado el 13/10/2026.
+- Paso 3 (n8n): commits 1 a 8 hechos el 15/10/2026 (aprobación por link local). Falta la extensión
+  A (botones de Telegram + ngrok, obligatoria), y antes verificar qué permite la cuenta gratuita de
+  ngrok. Después sigue el Paso 4 (medición de MTTD/MTTR).
 
 ## Limitaciones conocidas (declararlas en el informe)
 - **Evidencia incompleta en escrituras largas o en varios pasos.** El monitor reacciona al primer
@@ -82,11 +100,20 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - **Inmutabilidad.** El registro es de solo-agregar para la cuenta del agente (`fim_user`), no
   para el superusuario de PostgreSQL.
 - **Solo directorios.** `RUTAS_MONITOREADAS` acepta directorios, no archivos sueltos.
+- **Decisión repetida.** Si el monitor ejecuta una decisión pero no puede registrarla en
+  `ejecuciones` (BD caída en ese instante), al reiniciarse la vuelve a ejecutar. Restaurar o cerrar
+  dos veces no cambia nada; aceptar dos veces genera una versión de baseline de más.
+- **Ventanas que vencen.** Lo que se cambió dentro de una ventana y no se pasó a la baseline vuelve a
+  tratarse como cambio no autorizado en el próximo evento o escaneo.
+- **Links locales.** Con la opción de link local solo se decide desde la PC donde corre n8n.
+- **Resultado reconstruido.** Cuando el respaldo reenvía un evento, deduce el resultado de la BD; un
+  cambio de propietario que no se pudo reponer (sin root) aparece como pendiente.
+- **Espera de 24 h sin probar.** El aviso de "pasaron 24 h sin decisión" no se probó de punta a punta.
 
 ## Stack
 - Python 3 + venv: watchdog 6, psycopg2-binary, python-dotenv (ver requirements.txt)
 - PostgreSQL local: base `fim_db`, usuario `fim_user`, credenciales en `.env` (plantilla: `.env.example`)
-- n8n (pendiente de integrar)
+- n8n 2.41.4 sobre Node 24 (nvm, sin tocar el Node 20 del sistema); ver `n8n/README.md`
 - Ubuntu en WSL2 sobre Windows
 
 ## Entorno — importante
