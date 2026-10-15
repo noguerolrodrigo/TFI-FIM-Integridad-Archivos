@@ -1,0 +1,14 @@
+# Traffic Policy del túnel ngrok (plantilla). iniciar_ngrok.sh reemplaza __TELEGRAM_WEBHOOK_SUFIJO__
+# por el valor del .env en un archivo temporal: el sufijo nunca queda en el repositorio.
+#
+# Desde internet solo existe una ruta: el POST de Telegram a /webhook/telegram-<sufijo>.
+# Todo lo demás (editor, API, formularios, links de espera y el webhook del monitor) se corta en
+# ngrok con 404 y nunca llega a la PC.
+on_http_request:
+  - name: solo-el-webhook-de-telegram
+    expressions:
+      - "req.method != 'POST' || req.url.path != '/webhook/telegram-__TELEGRAM_WEBHOOK_SUFIJO__'"
+    actions:
+      - type: deny
+        config:
+          status_code: 404
