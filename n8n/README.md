@@ -72,7 +72,7 @@ Para que el monitor avise a n8n, el `.env` tiene que tener
 
 | Archivo | Qué hace |
 |---|---|
-| `PB-B_deteccion_respuesta.json` | Recibe el aviso del monitor, valida el secreto, lee el evento y su historial de la BD, manda la alerta por Telegram con el diff y espera la decisión con links locales. También confirma por Telegram cuando el monitor ejecutó la decisión. |
+| `PB-B_deteccion_respuesta.json` | Recibe el aviso del monitor, valida el secreto, lee el evento y su historial de la BD, manda la alerta por Telegram con el diff y espera la decisión con links locales (van como texto para copiar: Telegram no linkea `localhost`). También confirma por Telegram cuando el monitor ejecutó la decisión. |
 | `PB-A_baseline_autorizada.json` | Formulario en <http://localhost:5678/form/fim-ventana> para abrir una ventana de mantenimiento. Pide sesión iniciada en n8n y registra quién la abrió. |
 | `respaldo_notificaciones.json` | Cada minuto reenvía a PB-B los eventos de la última hora que quedaron sin notificar (por ejemplo, si n8n estaba apagado). |
 
@@ -84,7 +84,8 @@ Para que el monitor avise a n8n, el `.env` tiene que tener
 | dejó el archivo esperando (modo aprobación) | *Restaurar* / *Aceptar cambio* |
 | registró un cambio dentro de una ventana de mantenimiento | *Pasar a la baseline* / *Restaurar* |
 
-Los links solo funcionan desde la PC (`localhost`), valen 24 h y llevan una firma que genera n8n,
+Los links van como texto para copiar y pegar en el navegador de la PC (Telegram no linkea
+`localhost`), valen 24 h y llevan una firma que genera n8n,
 así que no se pueden adivinar. Se puede decidir una sola vez por evento: la BD rechaza una segunda
 decisión.
 

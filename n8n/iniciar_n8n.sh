@@ -51,6 +51,7 @@ exec env -i \
     N8N_PORT="$PUERTO" \
     N8N_HOST=localhost \
     N8N_EDITOR_BASE_URL="http://localhost:$PUERTO" \
+    WEBHOOK_URL="http://localhost:$PUERTO/" \
     GENERIC_TIMEZONE=America/Argentina/Mendoza \
     TZ=America/Argentina/Mendoza \
     N8N_DIAGNOSTICS_ENABLED=false \
