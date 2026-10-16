@@ -77,6 +77,17 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   `TELEGRAM_CHAT_ID` (otras cuentas van a `accesos_rechazados`). El sufijo y los secretos están solo
   en el `.env`.
 - `scripts/preparar_bd_pruebas.sh`: deja `fim_pruebas` con el esquema de `fim_db`, vacía.
+- Mediciones (Paso 4), todas contra `fim_pruebas` salvo la muestra real:
+  - `scripts/n8n_de_pruebas.sh iniciar|detener`: n8n descartable (puerto 5690, datos en /tmp) con
+    Telegram simulado (`scripts/telegram_falso.py`).
+  - `scripts/medir_metricas.py --repeticiones 50`: MTTD, MTTR (BD y disco), alerta, ejecución y
+    costo del COMMIT. `--telegram-real --repeticiones 10`: muestra con el bot real (lee `fim_db`).
+  - `scripts/medir_falsos_positivos.py --ediciones 20`: vim y nano con y sin filtro de temporales.
+  - `scripts/medir_escaneo_periodico.py`: escaneo completo de una copia de /etc y cron de 10 s.
+  - `scripts/resumir_metricas.py <csv>`: resumen (media, mediana, p95, mín., máx.) y gráfico.
+  - `scripts/armar_readme_resultados.py`: arma `resultados/README.md` desde los CSV.
+  - Resultados versionados en `resultados/` (CSV, resúmenes, gráficos, entorno). La lectura y la
+    comparación con la tabla supuesta del .docx están en `resultados/README.md`.
 - `tests/`: pytest (`pytest` desde la raíz). Los del monitor usan una baseline en memoria
   (`tests/conftest.py`); los de conexión solo hacen SELECT y se saltean si PostgreSQL no está;
   `test_integracion_bd.py` usa `fim_pruebas`, nunca `fim_db`.
@@ -85,8 +96,17 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - Paso 3 (n8n) terminado: commits 1 a 8 el 15/10/2026 (link local) y extensión A (9a a 9d) el
   mismo día. Prueba real hecha el 15/10/2026 desde el celular por 4G, sin wifi: evento #43
   (MODIFICADO, restaurado en el mismo segundo), decisión #3 "Fue un incidente" por `telegram`,
-  ejecutada 0,6 s después. Sigue el Paso 4 (medición de MTTD/MTTR); después se congela el código
-  (solo arreglos).
+  ejecutada 0,6 s después.
+- Paso 4 (medición) terminado el 16/10/2026. Medianas medidas: MTTD 5,4 ms; restauración 45,4 ms
+  (casi todo es el COMMIT de PostgreSQL en el disco de WSL2: ~38 ms en reposo, ~2 ms en ráfaga);
+  alerta 125 ms con Telegram simulado y 1,1 s con el real; ejecución de una decisión 0,9 s (sondeo
+  de 2 s); falsos positivos 0 % con el filtro y 50–67 % sin él. Detalle en `resultados/README.md`.
+
+## CÓDIGO CONGELADO (desde el 16/10/2026)
+- No se agregan funcionalidades. Solo se aceptan arreglos de errores, cada uno en su commit, con
+  test que lo cubra cuando se pueda.
+- Si un arreglo toca el monitor, la baseline o los workflows, hay que volver a correr las
+  mediciones afectadas y versionar los resultados nuevos sin borrar los anteriores.
 
 ## Limitaciones conocidas (declararlas en el informe)
 - **Evidencia incompleta en escrituras largas o en varios pasos.** El monitor reacciona al primer
@@ -124,6 +144,9 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   la página HTML vacía del editor, sin datos de la instancia, y el editor no puede funcionar porque
   `/rest`, `/assets` y `/static` siguen bloqueados. Mitigación: la única ruta permitida lleva un
   sufijo aleatorio de 32 caracteres, así que hay que adivinarlo para llegar siquiera a esa página.
+- **Mediciones en WSL2.** Los tiempos son de una notebook con WSL2; el COMMIT de PostgreSQL
+  (~38 ms con el disco en reposo) domina el MTTR y sería distinto en un servidor con disco nativo.
+  Hubo una pausa general en una repetición (396 ms) que quedó en los datos.
 - **Plan gratuito de ngrok.** Depende de un tercero y de sus límites (20 000 pedidos y 1 GB al mes);
   si el túnel no está, los botones no funcionan y queda el link local.
 
