@@ -3,7 +3,7 @@
 Uso: python scripts/medir_falsos_positivos.py --ediciones 20
 
 Abre vim y nano en una pseudo-terminal y les tipea teclas de verdad (agregar una línea al final,
-guardar y salir), con su configuración por defecto. Cuenta las alertas que registra el monitor real
+guardar y salir), sin configuración personal (rige la del sistema). Cuenta las alertas que registra el monitor real
 en fim_pruebas por cada edición:
     esperada   la primera detección MODIFICADO del archivo editado (el cambio real)
     espurias   todo lo demás: archivos temporales del editor (.swp, ~, 4913), MOVIDO o ELIMINADO
@@ -214,8 +214,9 @@ def main():
     versiones = {e: subprocess.run([e, "--version"], capture_output=True, text=True).stdout.splitlines()[0]
                  for e in COMANDOS}
     with open(archivo_md, "a", encoding="utf-8") as f:
-        f.write(f"\nEditores: {versiones['vim']}; {versiones['nano']}. Configuración por defecto (sin vimrc ni "
-                f"nanorc propios). Monitor en modo aprobación. Fecha: {inicio:%d/%m/%Y %H:%M}.\n")
+        f.write(f"\nEditores: {versiones['vim']}; {versiones['nano']}. Sin configuración personal: rige la del "
+                f"sistema (Ubuntu: /etc/nanorc trae 'set locking', que crea los .swp de nano; vim usa "
+                f"backupcopy=yes, que guarda sobre el mismo archivo). Monitor en modo aprobación. Fecha: {inicio:%d/%m/%Y %H:%M}.\n")
     print(f"[*] Resultados en {archivo_csv} y {archivo_md}")
     print(open(archivo_md, encoding="utf-8").read())
 
