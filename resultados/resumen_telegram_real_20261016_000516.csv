@@ -1,0 +1,4 @@
+caso,metrica,n,faltantes,media,mediana,p95,minimo,maximo
+telegram_real,mttd_ms,10,0,8.159,5.204,23.45,2.696,35.207
+telegram_real,mttr_disco_ms,10,0,37.251,47.388,51.546,6.735,52.513
+telegram_real,alerta_ms,10,0,1108.114,1105.36,1258.557,983.176,1293.958

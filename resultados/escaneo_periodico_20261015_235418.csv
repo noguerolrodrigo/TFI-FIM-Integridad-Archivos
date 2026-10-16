@@ -1,0 +1,51 @@
+caso,repeticion,metrica,valor_ms,observacion
+escaneo_completo,1,duracion_ms,11.526,719 archivos
+escaneo_completo,2,duracion_ms,9.855,719 archivos
+escaneo_completo,3,duracion_ms,9.842,719 archivos
+escaneo_completo,4,duracion_ms,9.181,719 archivos
+escaneo_completo,5,duracion_ms,9.674,719 archivos
+escaneo_completo,6,duracion_ms,10.52,719 archivos
+escaneo_completo,7,duracion_ms,9.964,719 archivos
+escaneo_completo,8,duracion_ms,9.694,719 archivos
+escaneo_completo,9,duracion_ms,9.2,719 archivos
+escaneo_completo,10,duracion_ms,9.46,719 archivos
+escaneo_completo,11,duracion_ms,10.496,719 archivos
+escaneo_completo,12,duracion_ms,9.368,719 archivos
+escaneo_completo,13,duracion_ms,9.356,719 archivos
+escaneo_completo,14,duracion_ms,9.563,719 archivos
+escaneo_completo,15,duracion_ms,9.356,719 archivos
+escaneo_completo,16,duracion_ms,9.642,719 archivos
+escaneo_completo,17,duracion_ms,10.015,719 archivos
+escaneo_completo,18,duracion_ms,9.749,719 archivos
+escaneo_completo,19,duracion_ms,9.545,719 archivos
+escaneo_completo,20,duracion_ms,9.2,719 archivos
+cron_T10s,1,deteccion_ms,8831.295,iproute2/rt_protos
+cron_T10s,2,deteccion_ms,469.486,sysctl.conf
+cron_T10s,3,deteccion_ms,1393.034,apparmor.d/abstractions/php5
+cron_T10s,4,deteccion_ms,1147.711,profile.d/Z97-byobu.sh
+cron_T10s,5,deteccion_ms,3783.077,cron.monthly/.placeholder
+cron_T10s,6,deteccion_ms,2158.243,modprobe.d/blacklist-firewire.conf
+cron_T10s,7,deteccion_ms,1571.348,init.d/sysstat
+cron_T10s,8,deteccion_ms,2469.135,passwd
+cron_T10s,9,deteccion_ms,5589.247,NetworkManager/conf.d/10-ubuntu-fan.conf
+cron_T10s,10,deteccion_ms,3850.712,apparmor.d/abstractions/recent-documents-write
+cron_T10s,11,deteccion_ms,7124.021,apparmor.d/abstractions/orbit2
+cron_T10s,12,deteccion_ms,5501.009,vim/vimrc.tiny
+cron_T10s,13,deteccion_ms,5081.698,ca-certificates.conf.dpkg-old
+cron_T10s,14,deteccion_ms,7894.292,apparmor.d/tunables/global
+cron_T10s,15,deteccion_ms,6513.694,cloud/templates/ntp.conf.freebsd.tmpl
+cron_T10s,16,deteccion_ms,2214.205,ld.so.conf.d/fakeroot-x86_64-linux-gnu.conf
+cron_T10s,17,deteccion_ms,3321.137,cloud/templates/hosts.alpine.tmpl
+cron_T10s,18,deteccion_ms,9104.546,logrotate.d/unattended-upgrades
+cron_T10s,19,deteccion_ms,7070.686,fonts/conf.avail/20-unhint-small-dejavu-sans.conf
+cron_T10s,20,deteccion_ms,8586.723,supercat/spcrc-crontab
+cron_T10s,21,deteccion_ms,2948.175,pam.d/newusers
+cron_T10s,22,deteccion_ms,6899.686,cloud/templates/sources.list.ubuntu.tmpl
+cron_T10s,23,deteccion_ms,6352.204,cron.weekly/man-db
+cron_T10s,24,deteccion_ms,9085.738,pam.d/sudo-i
+cron_T10s,25,deteccion_ms,4733.347,apparmor.d/abstractions/ssl_certs
+cron_T10s,26,deteccion_ms,5388.93,profile.d/01-locale-fix.sh
+cron_T10s,27,deteccion_ms,1222.761,console-setup/compose.ISO-8859-5.inc
+cron_T10s,28,deteccion_ms,823.802,apparmor.d/tunables/proc
+cron_T10s,29,deteccion_ms,1557.056,newt/palette.ubuntu
+cron_T10s,30,deteccion_ms,707.342,hostname

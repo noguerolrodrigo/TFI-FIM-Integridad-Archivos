@@ -1,0 +1,21 @@
+{
+  "modo": "simulado (fim_pruebas, n8n de pruebas, Telegram simulado)",
+  "repeticiones": 50,
+  "tamanos": {
+    "texto": "2 KB aprox.",
+    "binario": "1 MB"
+  },
+  "semilla_esperas_decision": 2026,
+  "fim_db_max_id_antes": 44,
+  "fim_db_max_id_despues": 44,
+  "fim_db_intacta": true,
+  "inicio": "2026-10-15T23:24:07.983464-03:00",
+  "fin": "2026-10-15T23:30:01.274909-03:00",
+  "python": "3.12.3",
+  "postgresql": "16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)",
+  "n8n": "2.41.4",
+  "kernel": "6.6.87.2-microsoft-standard-WSL2",
+  "procesadores": 16,
+  "cpu": "Intel(R) Core(TM) 7 240H",
+  "watchdog": "6.0.0"
+}
