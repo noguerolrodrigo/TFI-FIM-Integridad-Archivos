@@ -1,1 +1,2 @@
 Archivo de configuracion inicial. Estado cero.
+prueba de integración con n8n
