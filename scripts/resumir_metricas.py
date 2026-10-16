@@ -138,7 +138,10 @@ def graficar(grupos, archivo_png):
             eje.scatter(valores, [posicion + c for c in corrimientos], s=9, color=serie, alpha=0.35,
                         linewidths=0, zorder=3)
             mediana = percentil(valores, 50)
-            eje.annotate(f"mediana {mediana:.1f} ms", (max(valores), posicion), xytext=(6, 0),
+            # La etiqueta va al final del bigote (no junto a un valor atípico aislado)
+            q1, q3 = percentil(valores, 25), percentil(valores, 75)
+            fin_bigote = max(v for v in valores if v <= q3 + 1.5 * (q3 - q1))
+            eje.annotate(f"mediana {mediana:.1f} ms", (fin_bigote, posicion), xytext=(6, 7),
                          textcoords="offset points", va="center", fontsize=8, color=tinta_suave)
         eje.set_yticks(list(posiciones), [n for n, _ in datos], fontsize=9, color=tinta)
         eje.set_title(titulo, loc="left", fontsize=10, color=tinta, pad=6)
