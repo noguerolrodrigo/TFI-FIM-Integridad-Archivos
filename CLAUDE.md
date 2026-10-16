@@ -82,9 +82,11 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   `test_integracion_bd.py` usa `fim_pruebas`, nunca `fim_db`.
 - `.gitattributes` fija los saltos de línea en LF.
 - Plan de mejoras del motor en 12 commits (Paso 2) terminado el 13/10/2026.
-- Paso 3 (n8n): commits 1 a 8 hechos el 15/10/2026 (link local) y extensión A (9a a 9d) el
-  16/10/2026, probada en laboratorio. Falta la prueba real desde el celular con datos móviles.
-  Después sigue el Paso 4 (medición de MTTD/MTTR).
+- Paso 3 (n8n) terminado: commits 1 a 8 el 15/10/2026 (link local) y extensión A (9a a 9d) el
+  mismo día. Prueba real hecha el 15/10/2026 desde el celular por 4G, sin wifi: evento #43
+  (MODIFICADO, restaurado en el mismo segundo), decisión #3 "Fue un incidente" por `telegram`,
+  ejecutada 0,6 s después. Sigue el Paso 4 (medición de MTTD/MTTR); después se congela el código
+  (solo arreglos).
 
 ## Limitaciones conocidas (declararlas en el informe)
 - **Evidencia incompleta en escrituras largas o en varios pasos.** El monitor reacciona al primer
@@ -116,7 +118,7 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - **Espera de 24 h sin probar.** El aviso de "pasaron 24 h sin decisión" no se probó de punta a punta.
 - **Normalización de paths en ngrok.** La Traffic Policy se evalúa sobre el path normalizado y ngrok
   reenvía el path original, así que variantes como `//webhook/...`, `/%2Fwebhook/...` o
-  `/./webhook/...` pasan el filtro (verificado el 16/10/2026 con un servidor descartable; también
+  `/./webhook/...` pasan el filtro (verificado el 15/10/2026 con un servidor descartable; también
   `req.url` viene normalizada). Evidencia de que no expone datos: contra n8n, esas variantes con POST
   dan 404 o caen en el mismo webhook de Telegram (que exige el `secret_token`); con GET devuelven solo
   la página HTML vacía del editor, sin datos de la instancia, y el editor no puede funcionar porque
