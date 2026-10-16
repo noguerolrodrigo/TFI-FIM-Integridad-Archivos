@@ -15,13 +15,17 @@ import os
 import sys
 from collections import defaultdict
 
-ORDEN_CASOS = ["texto", "binario", "permisos", "borrado", "archivo_nuevo", "decision", "telegram_real"]
+ORDEN_CASOS = ["texto", "binario", "permisos", "borrado", "archivo_nuevo", "decision", "telegram_real",
+               "commit_en_reposo", "commit_seguido"]
 NOMBRES_CASOS = {"texto": "Texto (2 KB)", "binario": "Binario (1 MB)", "permisos": "Permisos",
                  "borrado": "Borrado", "archivo_nuevo": "Archivo nuevo", "decision": "Decisión",
-                 "telegram_real": "Telegram real"}
-ORDEN_METRICAS = ["mttd_ms", "mttr_disco_ms", "contencion_ms", "mttr_bd_ms", "alerta_ms", "ejecucion_ms"]
+                 "telegram_real": "Telegram real", "commit_en_reposo": "COMMIT en reposo",
+                 "commit_seguido": "COMMIT en ráfaga"}
+ORDEN_METRICAS = ["mttd_ms", "mttr_disco_ms", "contencion_ms", "mttr_bd_ms", "alerta_ms", "ejecucion_ms",
+                  "commit_ms"]
 NOMBRES_METRICAS = {"mttd_ms": "MTTD", "mttr_disco_ms": "MTTR (disco)", "contencion_ms": "Aislamiento",
-                    "mttr_bd_ms": "MTTR (fila RESTAURADO)", "alerta_ms": "Alerta", "ejecucion_ms": "Ejecución"}
+                    "mttr_bd_ms": "MTTR (fila RESTAURADO)", "alerta_ms": "Alerta", "ejecucion_ms": "Ejecución",
+                    "commit_ms": "COMMIT"}
 
 
 def percentil(valores, p):
@@ -105,17 +109,22 @@ def graficar(grupos, archivo_png):
         ("Alerta: detección → notificación de n8n", ["alerta_ms"]),
         ("Ejecución: decisión → ejecución del monitor", ["ejecucion_ms"]),
     ]
-    paneles = [(t, m) for t, m in paneles if any(k[1] in m and grupos[k][0] for k in grupos)]
-
-    fig, ejes = plt.subplots(len(paneles), 1, figsize=(8, 2.2 + 1.9 * len(paneles)), facecolor=superficie,
-                             squeeze=False)
-    for eje, (titulo, metricas) in zip(ejes[:, 0], paneles):
+    contenido = []
+    for titulo, metricas in paneles:
         datos = []
         for caso in ORDEN_CASOS:
             valores = [v for m in metricas for v in grupos.get((caso, m), ([], 0))[0]]
             if valores:
                 datos.append((NOMBRES_CASOS[caso], valores))
-        datos.reverse()  # el primer caso arriba
+        if datos:
+            datos.reverse()  # el primer caso arriba
+            contenido.append((titulo, datos))
+
+    # Cada panel tan alto como filas tiene, para que una fila sola no quede estirada
+    alturas = [len(datos) + 1.2 for _, datos in contenido]
+    fig, ejes = plt.subplots(len(contenido), 1, figsize=(8, 0.42 * sum(alturas) + 0.5), facecolor=superficie,
+                             squeeze=False, gridspec_kw={"height_ratios": alturas})
+    for eje, (titulo, datos) in zip(ejes[:, 0], contenido):
         posiciones = range(1, len(datos) + 1)
         eje.set_facecolor(superficie)
         eje.boxplot([v for _, v in datos], positions=list(posiciones), orientation="horizontal", widths=0.45,
@@ -141,8 +150,9 @@ def graficar(grupos, archivo_png):
         for lado in ("top", "right", "left"):
             eje.spines[lado].set_visible(False)
         eje.spines["bottom"].set_color(grilla)
-        eje.set_xlim(left=0)
-        eje.margins(x=0.25)
+        # Lugar a la derecha para la etiqueta de la mediana
+        eje.set_xlim(0, max(max(v) for _, v in datos) * 1.4)
+        eje.set_ylim(0.4, len(datos) + 0.6)
     fig.tight_layout()
     fig.savefig(archivo_png, dpi=200, facecolor=superficie)
     plt.close(fig)

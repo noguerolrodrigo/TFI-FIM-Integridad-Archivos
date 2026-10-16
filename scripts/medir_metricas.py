@@ -18,6 +18,7 @@ Definiciones (t0 = instante en que el script terminó la escritura, después de 
     contencion_ms      t0 -> el archivo nuevo ya no está en el directorio (archivo nuevo)
     alerta_ms          fila de detección -> fila en notificaciones (n8n ya mandó el mensaje)
     ejecucion_ms       fila en decisiones -> fila en ejecuciones (sin tiempo humano)
+    commit_ms          cuánto tarda un COMMIT de PostgreSQL (casos commit_en_reposo y commit_seguido)
 Los tiempos de la BD y los del script salen del mismo reloj: todo corre en la misma máquina.
 """
 import argparse
@@ -26,6 +27,7 @@ import hashlib
 import json
 import os
 import platform
+import random
 import shutil
 import subprocess
 import sys
@@ -48,6 +50,7 @@ N8N_PRUEBAS = os.path.join(PROYECTO, "scripts", "n8n_de_pruebas.sh")
 ESPERA_MAXIMA = 15      # segundos que se espera cada cosa antes de anotarla como faltante
 SONDEO = 0.001          # cada cuánto se mira el disco (1 ms)
 PAUSA_ENTRE = 0.5       # pausa entre repeticiones, para que no se pisen
+SEMILLA = 2026          # semilla de las esperas al azar (queda en el .json para repetir la corrida)
 
 
 def conectar(base):
@@ -88,6 +91,7 @@ class Medicion:
     def __init__(self, conexion):
         self.conexion = conexion
         self.filas = []
+        self.azar = random.Random(SEMILLA)
 
     def anotar(self, caso, repeticion, metrica, valor_ms, evento_id=None, observacion=""):
         self.filas.append({"caso": caso, "repeticion": repeticion, "metrica": metrica,
@@ -156,6 +160,34 @@ class Medicion:
             self.anotar(caso, k, "alerta_ms", ms(fecha_deteccion, float(fecha)) if fecha else None,
                         evento_id, "" if fecha else "sin fila en notificaciones")
         return evento_id
+
+
+# --- Costo del COMMIT -----------------------------------------------------------------------
+
+def medir_commit(medicion, repeticiones):
+    """Mide cuánto tarda un COMMIT de una fila, con la conexión en reposo y en ráfaga.
+
+    El monitor guarda la evidencia antes de restaurar, así que el COMMIT de la fila de detección
+    queda dentro del MTTR. En el disco virtual de WSL2 ese COMMIT (que espera el fsync) es mucho
+    más lento cuando el disco viene de estar en reposo: esto lo deja medido junto con el resto.
+    """
+    conexion = psycopg2.connect(host=config.DB_HOST, database=BASE_PRUEBAS, user=config.DB_USER,
+                                password=config.DB_PASS)
+    try:
+        with conexion.cursor() as cursor:
+            cursor.execute("CREATE TABLE medicion_commit (x integer)")
+            conexion.commit()
+            for caso, pausa in (("commit_en_reposo", PAUSA_ENTRE), ("commit_seguido", 0)):
+                for k in range(1, repeticiones + 1):
+                    time.sleep(pausa)
+                    cursor.execute("INSERT INTO medicion_commit VALUES (%s)", (k,))
+                    inicio = time.time()
+                    conexion.commit()
+                    medicion.anotar(caso, k, "commit_ms", ms(inicio, time.time()))
+            cursor.execute("DROP TABLE medicion_commit")
+            conexion.commit()
+    finally:
+        conexion.close()
 
 
 # --- Modo simulado ------------------------------------------------------------------------
@@ -249,6 +281,8 @@ def medir_simulado(repeticiones, salida):
         print("[*] Latencia de ejecución de decisiones")
         for k in range(1, repeticiones + 1):
             medir_ejecucion(medicion, k, rutas["decision"])
+        print("[*] Costo del COMMIT de PostgreSQL")
+        medir_commit(medicion, repeticiones)
     finally:
         monitor.terminate()
         monitor.wait(10)
@@ -260,6 +294,7 @@ def medir_simulado(repeticiones, salida):
         "modo": "simulado (fim_pruebas, n8n de pruebas, Telegram simulado)",
         "repeticiones": repeticiones,
         "tamanos": {"texto": "2 KB aprox.", "binario": "1 MB"},
+        "semilla_esperas_decision": SEMILLA,
         "fim_db_max_id_antes": id_fim_db_antes,
         "fim_db_max_id_despues": id_fim_db_despues,
         "fim_db_intacta": id_fim_db_antes == id_fim_db_despues,
@@ -348,6 +383,9 @@ def medir_ejecucion(medicion, k, ruta):
         return
     # Se espera la alerta para que la decisión no compita con el workflow de n8n
     medicion.notificacion(fila[0])
+    # El monitor busca decisiones cada 2 s. Si todas se insertaran a la misma distancia de ese ciclo,
+    # se mediría siempre el mismo punto; una persona decide en un momento cualquiera: espera al azar.
+    time.sleep(medicion.azar.uniform(0, 2))
     decision = "INCIDENTE" if k % 2 else "AUTORIZADO"
     (decision_id, fecha_decision), = consultar(medicion.conexion, """
         INSERT INTO decisiones (evento_id, decision, decidido_por, canal)
