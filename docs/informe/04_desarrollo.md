@@ -338,9 +338,19 @@ variantes no exponen datos: n8n las rechaza o devuelve una página vacía del ed
 funcionar sin el resto de las rutas, que siguen bloqueadas. Esta limitación se detalla en el
 Capítulo 6.
 
-El funcionamiento completo se probó el 15 de octubre de 2026 desde un teléfono con datos móviles
-(sin la red Wi-Fi del equipo): la alerta del evento 43 se respondió con "Fue un incidente" y el
-monitor ejecutó la decisión.
+El ciclo completo se probó el 15 de octubre de 2026 con el evento 43 (Figura 4.2). La decisión se
+tomó desde el teléfono con los botones de Telegram: el pedido viaja por los servidores de Telegram y
+entra al equipo por el túnel de ngrok, sin necesidad de que el dispositivo esté en la misma red que
+el servidor. La alerta se respondió con "Fue un incidente" y el monitor ejecutó la decisión.
+
+![Figura 4.2](img/ciclo_completo_evento43.png)
+
+**Figura 4.2.** Ciclo completo del evento 43 visto en Telegram. La alerta informa el archivo
+modificado (`config_test.txt`), la fecha y hora, los hashes anterior y nuevo, la ubicación de la copia
+en cuarentena, el historial del archivo, que el monitor ya lo restauró desde la bóveda y el diff con
+la línea agregada. Debajo aparecen los enlaces locales de respaldo y los botones "Fue un incidente" y
+"Era un cambio autorizado". El último mensaje es la confirmación de n8n: "Decisión EJECUTADA:
+INCIDENTE sobre config_test.txt (evento #43)", tomada por telegram.
 
 ## 4.8 Configuración y puesta en marcha
 

@@ -94,9 +94,11 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - `.gitattributes` fija los saltos de línea en LF.
 - Plan de mejoras del motor en 12 commits (Paso 2) terminado el 13/10/2026.
 - Paso 3 (n8n) terminado: commits 1 a 8 el 15/10/2026 (link local) y extensión A (9a a 9d) el
-  mismo día. Prueba real hecha el 15/10/2026 desde el celular por 4G, sin wifi: evento #43
-  (MODIFICADO, restaurado en el mismo segundo), decisión #3 "Fue un incidente" por `telegram`,
-  ejecutada 0,6 s después.
+  mismo día. Prueba real hecha el 15/10/2026: evento #43 (MODIFICADO, restaurado en el mismo
+  segundo), decisión #3 "Fue un incidente" tomada desde el celular con los botones de Telegram
+  (el pedido entra por los servidores de Telegram y el túnel ngrok, sin que el celular tenga que
+  estar en la misma red), ejecutada 0,6 s después. NO afirmar en el informe que fue por 4G o sin
+  wifi: no está verificado. Figura: `docs/informe/img/ciclo_completo_evento43.png`.
 - Paso 4 (medición) terminado el 16/10/2026. Medianas medidas: MTTD 5,4 ms; restauración 45,4 ms
   (casi todo es el COMMIT de PostgreSQL en el disco de WSL2: ~38 ms en reposo, ~2 ms en ráfaga);
   alerta 125 ms con Telegram simulado y 1,1 s con el real; ejecución de una decisión 0,9 s (sondeo
