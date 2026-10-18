@@ -14,10 +14,10 @@ para Linux (WSL2, kernel 6.6.87.2), con Python 3.12.3, PostgreSQL 16.15, la bibl
 6.0.0 y n8n 2.41.4 (fuente: `resultados/entorno_metricas_20261015_232407.json`).
 
 Para no alterar el registro de auditoría real, las mediciones automatizadas se ejecutaron sobre una
-base de datos separada (`fim_pruebas`), con el mismo esquema que la base productiva, y con una
-instancia de n8n de pruebas que envía las alertas a un servidor que simula la API de Telegram. Se
-verificó que la base productiva no recibiera filas nuevas durante estas corridas: el identificador
-máximo de `registros_archivos` fue 44 antes y después. La única excepción es una muestra de diez
+base de datos separada (`fim_pruebas`), con el mismo esquema que la base productiva (`fim_db`), y con
+una instancia de n8n de pruebas que envía las alertas a un servidor que simula la API de Telegram. Se
+verificó que la base productiva `fim_db` no recibiera filas nuevas durante estas corridas: el
+identificador máximo de su tabla `registros_archivos` fue 44 antes y después. La única excepción es una muestra de diez
 alertas enviadas con el bot de Telegram real (sección 5.3), que sí quedó registrada en la base
 productiva.
 
@@ -262,11 +262,31 @@ con dos editores.
 
 Los valores atípicos se mantuvieron en los datos. Los más relevantes son:
 
-- En la repetición 49 de la corrida principal se observó una demora general: el borrado se detectó
-  en 2,4 ms, pero la restauración tardó 396,4 ms, y las alertas de esa misma repetición tardaron
-  770,1 ms (borrado) y 331,9 ms (archivo nuevo). Como la detección fue normal y la demora afectó a
-  procesos distintos, se atribuye a una pausa momentánea del entorno (WSL2 o el disco) y no al FIM;
-  sin embargo, esta atribución no pudo verificarse.
+- **Repetición 49 de la corrida principal.** En esa repetición se demoraron a la vez varias
+  operaciones independientes entre sí. De los 15 valores medidos en ella, cuatro son el máximo de su
+  caso en las 50 repeticiones (Tabla 5.10), y corresponden a dos subsistemas distintos: la
+  restauración en disco, que depende del COMMIT de PostgreSQL y de la copia del archivo, y la
+  entrega de la alerta, que depende de n8n. En cambio, las detecciones de esa misma repetición
+  fueron normales (2,4 ms en el borrado y 2,8 ms en el archivo nuevo, ambas por debajo de la
+  mediana), y la repetición de permisos, ejecutada entre la del binario y la del borrado, tampoco
+  mostró demoras.
+
+  **Tabla 5.10.** Valores de la repetición 49 que fueron el máximo de su caso.
+
+  | Caso | Medición | Repetición 49 | Mediana de las 50 |
+  |---|---|---:|---:|
+  | Binario (1 MB) | Latencia de alerta | 213,4 | 129,5 |
+  | Borrado | Restauración en disco | 396,4 | 45,1 |
+  | Borrado | Latencia de alerta | 770,1 | 124,0 |
+  | Archivo nuevo | Latencia de alerta | 331,9 | 124,3 |
+
+  *Fuente: `resultados/metricas_20261015_232407.csv` (repetición 49) y
+  `resultados/resumen_20261015_232407.md` (medianas).*
+
+  Este patrón (detección normal y demoras simultáneas en procesos que no comparten código) es
+  consistente con una pausa del entorno, por ejemplo del disco virtual de WSL2. La causa exacta no
+  se verificó, porque durante la corrida no se registraron métricas del sistema operativo. Los
+  valores se mantienen en los datos y en todos los estadísticos del capítulo.
 - La primera alerta de la corrida tardó 606,2 ms, frente a una mediana de 124,3 ms en ese caso. Es
   consistente con la primera ejecución del flujo de trabajo en n8n, que debe inicializarse.
 - En la corrida principal, una detección del caso binario tardó 26,2 ms (mediana de 7,2 ms) y, en la
