@@ -352,6 +352,17 @@ la línea agregada. Debajo aparecen los enlaces locales de respaldo y los botone
 "Era un cambio autorizado". El último mensaje es la confirmación de n8n: "Decisión EJECUTADA:
 INCIDENTE sobre config_test.txt (evento #43)", tomada por telegram.
 
+La Figura 4.3 muestra el mismo mensaje en el teléfono desde el que se tomó la decisión.
+
+![Figura 4.3](img/figura_4_3_celular_evento43.png)
+
+**Figura 4.3.** La alerta del evento 43 vista en el teléfono. A la izquierda, la parte superior del
+mensaje: archivo, fecha y hora del evento, hashes, ubicación en cuarentena, historial, restauración y
+diff. A la derecha, la parte inferior: los enlaces locales de respaldo, los botones de decisión y la
+confirmación "Decisión EJECUTADA: INCIDENTE sobre config_test.txt (evento #43)". Las capturas se
+recortaron para quitar la barra de estado del teléfono, cuya hora corresponde al momento de la
+captura y no al del evento.
+
 ## 4.8 Configuración y puesta en marcha
 
 Toda la configuración se lee de un archivo `.env`, que no se versiona; el repositorio incluye una
