@@ -23,7 +23,7 @@ durante ese intervalo, una alteración pasa inadvertida.
 Existen herramientas que reducen esa ventana. La plataforma Wazuh, por ejemplo, incluye un módulo
 de FIM que, además de los escaneos programados (cada 12 horas en su configuración por defecto),
 permite el monitoreo en tiempo real de directorios en Linux y Windows y, con la opción
-`report_changes`, informa el contenido exacto que cambió en un archivo de texto (Wazuh Inc., 2026).
+`report_changes`, informa el contenido exacto que cambió en un archivo de texto (Wazuh, s.f.).
 Sin embargo, se trata de una plataforma de propósito general, cuya adopción supone desplegar y
 mantener un conjunto de componentes que excede las necesidades y los recursos de muchas
 organizaciones pequeñas.
@@ -43,8 +43,9 @@ respuesta controlada ante el incidente?**
 
 La identificación temprana de alteraciones permite acotar el daño de una intrusión y facilita la
 respuesta ante incidentes. Este trabajo se justifica por la posibilidad de construir un sistema de
-monitoreo de integridad con tecnologías de código abierto y de uso extendido (Python, PostgreSQL y
-la plataforma de automatización n8n), y de **medir** su desempeño en lugar de suponerlo.
+monitoreo de integridad con tecnologías de uso extendido y sin costo de licencia (Python y
+PostgreSQL, que son de código abierto, y la plataforma de automatización n8n, que se distribuye con
+una licencia *fair-code*), y de **medir** su desempeño en lugar de suponerlo.
 
 Desde la perspectiva forense, el sistema guarda, junto con cada alerta, la evidencia del cambio: los
 hashes anterior y nuevo, una copia del archivo alterado y, en los archivos de texto, las líneas
@@ -52,7 +53,7 @@ exactas que se agregaron o quitaron. Esto reduce el tiempo de análisis, porque 
 ve qué cambió sin tener que investigarlo a mano.
 
 El trabajo responde, además, a la consigna de la cátedra para el proyecto de integridad de archivos
-(Cortez, 2024), cuyos ejes son la detección de cambios no autorizados, las alertas y la respuesta
+(Cortez, 2026), cuyos ejes son la detección de cambios no autorizados, las alertas y la respuesta
 automatizada.
 
 ## 1.4 Objetivos de la investigación

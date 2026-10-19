@@ -9,8 +9,7 @@ de mínimo privilegio y la exposición segura de un servicio a internet.
 
 La seguridad de la información engloba las prácticas y tecnologías destinadas a proteger los activos
 digitales contra accesos o alteraciones no autorizadas. Se organiza en torno a tres propiedades,
-conocidas como tríada CIA: confidencialidad, integridad y disponibilidad (Bishop, 2003; Stallings,
-2018). Este trabajo se centra en la **integridad**, que busca que la información no sea modificada de
+conocidas como tríada CIA: confidencialidad, integridad y disponibilidad (Bishop, 2003). Este trabajo se centra en la **integridad**, que busca que la información no sea modificada de
 forma ilegítima y que cualquier alteración sea detectable y atribuible.
 
 ## 2.2 Funciones hash criptográficas (SHA-256)
@@ -51,7 +50,7 @@ recorrido. Con un período de una hora, por ejemplo, la espera media es de unos 
 
 Los sistemas Linux incluyen el subsistema **inotify**, que permite a un programa suscribirse a un
 directorio y recibir notificaciones del kernel cuando se crea, modifica, borra, mueve o cambia de
-atributos un archivo (Linux man-pages project, s.f.). Con este enfoque no hay que esperar al siguiente
+atributos un archivo (The Linux man-pages project, 2026). Con este enfoque no hay que esperar al siguiente
 ciclo: el programa se entera del cambio en el momento en que ocurre.
 
 La biblioteca **watchdog** de Python ofrece una interfaz de alto nivel sobre inotify y entrega los
@@ -100,8 +99,9 @@ La respuesta ante un cambio puede incluir dos acciones:
 Las plataformas de orquestación, automatización y respuesta de seguridad (SOAR, por sus siglas en
 inglés) coordinan las acciones que siguen a una alerta: enriquecerla con información, notificar,
 ejecutar acciones y registrar lo actuado. Esas secuencias se describen como **playbooks**. En este
-trabajo se utiliza n8n, una plataforma de automatización de flujos de trabajo de código abierto
-(n8n GmbH, s.f.), para implementar dos playbooks: uno de detección y respuesta, y otro de
+trabajo se utiliza n8n, una herramienta de automatización de flujos de trabajo distribuida con una
+licencia *fair-code*, que permite instalarla en un equipo propio (n8n, s.f.), para implementar dos
+playbooks: uno de detección y respuesta, y otro de
 actualización autorizada de la línea base.
 
 Una decisión central en la respuesta automatizada es cuánto se deja en manos de la máquina:
@@ -149,13 +149,13 @@ las cuentas de la aplicación: el administrador de la base de datos conserva la 
 
 Para recibir avisos de un servicio externo, como los de Telegram cuando una persona toca un botón, el
 servidor debe ser alcanzable desde internet. Cuando no tiene una dirección pública, se puede usar un
-**túnel inverso**: un agente que corre en el servidor abre una conexión saliente hacia un proveedor
-(en este trabajo, ngrok), que publica una dirección pública y reenvía por ese túnel los pedidos que
-recibe (ngrok, s.f.). Abrir un servicio a internet aumenta su superficie de ataque, por lo que se
+**túnel**: un agente que corre en el servidor crea un túnel cifrado hacia un proveedor (en este
+trabajo, ngrok), que publica una dirección pública y entrega por ese túnel el tráfico que recibe, sin
+necesidad de abrir puertos en el equipo ni modificar la red (ngrok, s.f.-a). Abrir un servicio a internet aumenta su superficie de ataque, por lo que se
 aplican varias capas de protección:
 
-- **Filtrado de rutas en el borde.** El proveedor del túnel puede evaluar reglas sobre cada pedido
-  antes de reenviarlo. Si solo se permite la ruta estrictamente necesaria, el resto del servicio (por
+- **Filtrado de rutas en el borde.** El proveedor del túnel puede evaluar reglas sobre cada pedido y
+  rechazarlo antes de que llegue al servicio (ngrok, s.f.-b). Si solo se permite la ruta estrictamente necesaria, el resto del servicio (por
   ejemplo, su interfaz de administración) no queda expuesto. Es importante saber si las reglas se
   evalúan sobre la ruta tal como llega o sobre una versión normalizada, porque variantes codificadas
   de una ruta pueden comportarse distinto.
