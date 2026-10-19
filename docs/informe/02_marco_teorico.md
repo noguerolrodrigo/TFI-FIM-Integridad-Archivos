@@ -22,7 +22,7 @@ el resumen actual de un archivo con el registrado en la línea base permite sabe
 cambió, sin guardar ni comparar el archivo completo.
 
 El sistema utiliza SHA-256, de la familia SHA-2, que produce resúmenes de 256 bits y está especificado
-en el estándar FIPS 180-4 (NIST, 2015). El archivo se lee en bloques, de modo que el consumo de memoria
+en el estándar FIPS 180-4 (National Institute of Standards and Technology [NIST], 2015). El archivo se lee en bloques, de modo que el consumo de memoria
 no depende de su tamaño.
 
 ## 2.3 Monitoreo de integridad de archivos (FIM)
@@ -151,11 +151,11 @@ Para recibir avisos de un servicio externo, como los de Telegram cuando una pers
 servidor debe ser alcanzable desde internet. Cuando no tiene una dirección pública, se puede usar un
 **túnel**: un agente que corre en el servidor crea un túnel cifrado hacia un proveedor (en este
 trabajo, ngrok), que publica una dirección pública y entrega por ese túnel el tráfico que recibe, sin
-necesidad de abrir puertos en el equipo ni modificar la red (ngrok, s.f.-a). Abrir un servicio a internet aumenta su superficie de ataque, por lo que se
+necesidad de abrir puertos en el equipo ni modificar la red (ngrok, s.f.-b). Abrir un servicio a internet aumenta su superficie de ataque, por lo que se
 aplican varias capas de protección:
 
 - **Filtrado de rutas en el borde.** El proveedor del túnel puede evaluar reglas sobre cada pedido y
-  rechazarlo antes de que llegue al servicio (ngrok, s.f.-b). Si solo se permite la ruta estrictamente necesaria, el resto del servicio (por
+  rechazarlo antes de que llegue al servicio (ngrok, s.f.-a). Si solo se permite la ruta estrictamente necesaria, el resto del servicio (por
   ejemplo, su interfaz de administración) no queda expuesto. Es importante saber si las reglas se
   evalúan sobre la ruta tal como llega o sobre una versión normalizada, porque variantes codificadas
   de una ruta pueden comportarse distinto.

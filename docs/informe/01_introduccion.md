@@ -23,7 +23,7 @@ durante ese intervalo, una alteración pasa inadvertida.
 Existen herramientas que reducen esa ventana. La plataforma Wazuh, por ejemplo, incluye un módulo
 de FIM que, además de los escaneos programados (cada 12 horas en su configuración por defecto),
 permite el monitoreo en tiempo real de directorios en Linux y Windows y, con la opción
-`report_changes`, informa el contenido exacto que cambió en un archivo de texto (Wazuh, s.f.).
+`report_changes`, informa el contenido exacto que cambió en un archivo de texto (Wazuh Inc., s.f.).
 Sin embargo, se trata de una plataforma de propósito general, cuya adopción supone desplegar y
 mantener un conjunto de componentes que excede las necesidades y los recursos de muchas
 organizaciones pequeñas.
