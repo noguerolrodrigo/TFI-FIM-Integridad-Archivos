@@ -1,0 +1,5 @@
+# Dependencias solo para armar el informe en .docx (docs/informe/armar_docx.py).
+# Van aparte de requirements.txt para no tocar el entorno del sistema congelado.
+#   pip install -r requirements-informe.txt
+python-docx==1.2.0
+pillow==12.3.0
