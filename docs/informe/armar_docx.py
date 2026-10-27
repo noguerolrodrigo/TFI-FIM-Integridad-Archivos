@@ -210,11 +210,10 @@ def escribir_inline(p, texto, tamano=12, negrita_base=False, cursiva_base=False,
         elif m.group(3):
             _agregar_hipervinculo(p, trozo[1:-1], tamano=tamano)
         elif m.group(4):
-            run = p.add_run(trozo[2:-2])
-            _fuente(run, tamano=tamano, negrita=True, cursiva=cursiva_base or None)
+            # Recursivo: adentro de la negrita o la cursiva puede haber código o enlaces
+            escribir_inline(p, trozo[2:-2], tamano, True, cursiva_base, tamano_codigo)
         else:
-            run = p.add_run(trozo[1:-1])
-            _fuente(run, tamano=tamano, cursiva=True, negrita=negrita_base or None)
+            escribir_inline(p, trozo[1:-1], tamano, negrita_base, True, tamano_codigo)
         pos = m.end()
     if pos < len(texto):
         run = p.add_run(texto[pos:])
@@ -228,8 +227,11 @@ def leer_bloques(ruta):
     lineas = open(ruta, encoding="utf-8").read().split("\n")
     bloques = []
     i = 0
+    # Lo que corta un ítem de lista aunque venga sangrado (una tabla o un epígrafe dentro del ítem)
+    corta_item = re.compile(r"^\s*(\||\*\*(Tabla|Figura) |\*Fuente)")
+    inicio_de_bloque = re.compile(r"^\s*(#{1,3} |```|\||!\[|- |\d+\. )")
     while i < len(lineas):
-        linea = lineas[i]
+        linea = lineas[i].lstrip() if lineas[i].lstrip().startswith("|") else lineas[i]
         if not linea.strip():
             i += 1
             continue
@@ -250,7 +252,7 @@ def leer_bloques(ruta):
             continue
         if linea.startswith("|"):
             filas = []
-            while i < len(lineas) and lineas[i].startswith("|"):
+            while i < len(lineas) and lineas[i].lstrip().startswith("|"):
                 celdas = [c.strip() for c in lineas[i].strip().strip("|").split("|")]
                 if not all(re.fullmatch(r":?-+:?", c) for c in celdas):
                     filas.append(celdas)
@@ -272,7 +274,8 @@ def leer_bloques(ruta):
                     items.append(m.group(2))
                     i += 1
                     # Continuaciones del ítem: líneas sangradas
-                    while i < len(lineas) and lineas[i].startswith("  ") and lineas[i].strip():
+                    while (i < len(lineas) and lineas[i].startswith("  ") and lineas[i].strip()
+                           and not corta_item.match(lineas[i])):
                         items[-1] += " " + lineas[i].strip()
                         i += 1
                 else:
@@ -281,7 +284,7 @@ def leer_bloques(ruta):
             continue
         # Párrafo: líneas seguidas hasta una en blanco o el inicio de otro bloque
         parrafo = []
-        while i < len(lineas) and lineas[i].strip() and not re.match(r"^(#{1,3} |```|\||!\[|- |\d+\. )", lineas[i]):
+        while i < len(lineas) and lineas[i].strip() and not inicio_de_bloque.match(lineas[i]):
             parrafo.append(lineas[i].strip())
             i += 1
         texto = " ".join(parrafo)
@@ -314,7 +317,8 @@ class Armador:
         texto_limpio = limpiar_markdown(texto)
         self.titulos.append((nivel, texto_limpio))
         p = self.doc.add_paragraph(style=f"Heading {nivel}")
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY if nivel > 1 else WD_ALIGN_PARAGRAPH.LEFT
+        # A la izquierda, no justificado: un título de dos líneas justificado queda con huecos
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
         if nivel == 1:
             _salto_de_pagina_antes(p)
             _set_spacing(p, 280, 240)
@@ -328,6 +332,10 @@ class Armador:
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         _set_spacing(p, antes, despues)
+        if texto.startswith("**Tabla"):
+            # El título de una tabla va arriba y no puede quedar solo al pie de la página
+            _mantener_con_siguiente(p)
+            p.paragraph_format.space_after = Pt(6)
         escribir_inline(p, texto, tamano=10, cursiva_base=True)
         return p
 
@@ -363,14 +371,18 @@ class Armador:
             return
         while lineas and not lineas[-1].strip():
             lineas.pop()
-        tamano = 9 if max((len(l) for l in lineas), default=0) <= 100 else 8
+        # Caben unos 83 caracteres a 9 pt, 94 a 8 pt y 107 a 7 pt en el ancho útil
+        largo = max((len(l) for l in lineas), default=0)
+        tamano = 9 if largo <= 83 else 8 if largo <= 94 else 7
+        # Un bloque corto no se parte; en uno largo solo se evita que queden 3 líneas sueltas
+        juntas = len(lineas) if len(lineas) <= 12 else 3
         for k, linea in enumerate(lineas):
             p = self.doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
             _set_spacing(p, 0, 0, 1.0)
             p.paragraph_format.left_indent = Pt(8)
             p.paragraph_format.right_indent = Pt(8)
-            if k < len(lineas) - 1:
+            if k < juntas - 1:
                 _mantener_con_siguiente(p)
             _sombrear(p._element.get_or_add_pPr(), GRIS_CODIGO)
             run = p.add_run(linea.replace("\t", "    ") or " ")
@@ -429,7 +441,7 @@ class Armador:
         _insertar_ordenado(tblpr, bordes, ORDEN_TBLPR)
 
         # Ancho total = ancho útil; cada columna proporcional al largo de su contenido, con un piso
-        anchos_contenido = [max(12, min(60, max(len(f[c]) for f in filas))) for c in range(columnas)]
+        anchos_contenido = [max(16, min(50, max(len(f[c]) for f in filas))) for c in range(columnas)]
         total = sum(anchos_contenido)
         anchos = [int(ANCHO_UTIL_TWIPS * a / total) for a in anchos_contenido]
         tblw = tblpr.find(qn("w:tblW"))
@@ -458,6 +470,9 @@ class Armador:
                 p = celda.paragraphs[0]
                 p.alignment = WD_ALIGN_PARAGRAPH.LEFT
                 _set_spacing(p, 20, 20, 1.0)
+                # Una tabla corta no se parte entre páginas; una larga sí (repite el encabezado)
+                if len(filas) <= 6 and r < len(filas) - 1:
+                    _mantener_con_siguiente(p)
                 escribir_inline(p, contenido, tamano, negrita_base=(r == 0), tamano_codigo=tamano - 1)
         # Aire después de la tabla
         p = self.doc.add_paragraph()
@@ -518,6 +533,10 @@ def conservar_portada(doc):
             parrafos_vistos += 1
             continue
         body.remove(hijo)
+    # Correcciones de texto en la portada (el avance tenía el nombre sin tilde)
+    for t in body.iter(qn("w:t")):
+        if t.text and "Rodrigo Jesus Noguerol" in t.text:
+            t.text = t.text.replace("Rodrigo Jesus Noguerol", "Rodrigo Jesús Noguerol")
 
 
 def volcar_resumen(armador, ruta):
