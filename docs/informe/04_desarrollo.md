@@ -46,7 +46,7 @@ código, el 16 de octubre, el repositorio acumuló 50 commits.
 La Figura 4.1 muestra los componentes del sistema y cómo se comunican.
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph Equipo["Equipo vigilado (Ubuntu en WSL2)"]
         D[("Directorios<br/>vigilados")]
         M["Monitor FIM<br/>monitor_fim.py"]
