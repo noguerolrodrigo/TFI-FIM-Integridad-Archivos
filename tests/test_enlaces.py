@@ -389,3 +389,36 @@ def test_aceptar_un_cambio_de_permisos_sigue_funcionando_con_un_archivo_comun(en
     assert monitor_fim.ejecutar_decision(entorno_monitor.decision(1, monitor_fim.ACEPTAR)) == "EJECUTADA"
     assert modo(ruta) == 0o600
     assert entorno_monitor.baseline[ruta]["permisos"] == "600"
+
+
+# --- Enlace a un directorio ---
+
+def test_un_enlace_a_un_directorio_se_registra_y_se_quita_en_tiempo_real(entorno_monitor, tmp_path):
+    entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n")
+    afuera = tmp_path / "afuera"
+    afuera.mkdir()
+    (afuera / "x.txt").write_text("archivo de afuera\n")
+    enlace = entorno_monitor.ruta("atajo")
+    os.symlink(afuera, enlace)
+
+    entorno_monitor.evento_creado(enlace)   # watchdog lo entrega como archivo creado, no como directorio
+
+    assert entorno_monitor.tipos_de_evento() == ["CREADO"]
+    assert not os.path.lexists(enlace)
+    assert os.listdir(afuera) == ["x.txt"]
+
+
+def test_el_escaneo_inicial_detecta_un_enlace_a_un_directorio(entorno_monitor, tmp_path):
+    entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n")
+    afuera = tmp_path / "afuera"
+    afuera.mkdir()
+    (afuera / "x.txt").write_text("archivo de afuera\n")
+    enlace = entorno_monitor.ruta("atajo")
+    os.symlink(afuera, enlace)
+
+    monitor_fim.escaneo_inicial()
+
+    assert entorno_monitor.tipos_de_evento() == ["CREADO"]
+    assert f"enlace simbólico → {afuera}" in entorno_monitor.eventos[0]["detalles_diff"]
+    assert not os.path.lexists(enlace)
+    assert os.listdir(afuera) == ["x.txt"]

@@ -731,6 +731,10 @@ def escaneo_inicial():
         for root, dirs, files in os.walk(directorio):
             for file in files:
                 rutas.add(os.path.join(root, file))
+            # os.walk lista los enlaces a directorios entre las carpetas y no entra en ellos
+            for carpeta in dirs:
+                if os.path.islink(os.path.join(root, carpeta)):
+                    rutas.add(os.path.join(root, carpeta))
 
     print(f"[*] Escaneo inicial: verificando {len(rutas)} archivo(s) contra la baseline...")
     for ruta in sorted(rutas):
