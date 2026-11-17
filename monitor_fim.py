@@ -472,7 +472,8 @@ def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, 
 
     # En modo aprobación el archivo queda alterado hasta que alguien aprueba:
     # el mismo cambio se registra una sola vez
-    if not se_restaura_ahora(aprobado_por) and estado != CREADO:
+    # (un archivo nuevo no entra acá porque se mueve a cuarentena; un enlace nuevo sí, porque queda)
+    if not se_restaura_ahora(aprobado_por) and (estado != CREADO or destino_enlace is not None):
         if avisados.get(ruta) == (estado, h, owner, permisos):
             return PENDIENTE, None
         avisados[ruta] = (estado, h, owner, permisos)
@@ -480,7 +481,7 @@ def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, 
     if estado == PERMISOS:
         return responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por, descriptor)
 
-    if estado == CREADO and aprobado_por is not None:
+    if estado == CREADO and aprobado_por is not None and destino_enlace is None:
         print(f"[-] {ruta} no está en la baseline: no hay nada que restaurar.")
         return CREADO, None
 
@@ -536,11 +537,20 @@ def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, 
     nota_copia = ""
     try:
         if estado == CREADO and destino_enlace is not None:
-            # Enlace que no está en la baseline: se quita el enlace (unlink no toca el destino).
-            # A dónde apuntaba ya quedó en el registro; no hay contenido propio que guardar.
+            # Enlace que no está en la baseline. No se puede mover a cuarentena como un archivo
+            # nuevo (no tiene contenido propio): la respuesta es quitarlo, y eso no se deshace solo.
+            # Por eso en modo aprobación espera la decisión, igual que una restauración.
+            if not se_restaura_ahora(aprobado_por):
+                avisar_pendiente(ruta)
+                return PENDIENTE, evento_id
+            # unlink quita el enlace y no toca el destino; a dónde apuntaba ya quedó en el registro
             os.unlink(ruta)
             print(f"[+] AISLAMIENTO EXITOSO: Enlace simbólico fuera de la baseline eliminado (→ {destino_enlace})")
             resultado = CREADO
+            if aprobado_por is not None:
+                log_to_db(nombre, ruta, None, RESTAURADO,
+                          f"Enlace simbólico eliminado (→ {destino_enlace})" + firma_de_aprobacion(aprobado_por))
+                resultado = RESTAURADO
             # Si el enlace estaba en el lugar de una carpeta, ahora sí se pueden reponer sus archivos
             revisar_directorio(ruta)
         elif estado == CREADO:

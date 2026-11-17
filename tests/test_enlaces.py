@@ -422,3 +422,48 @@ def test_el_escaneo_inicial_detecta_un_enlace_a_un_directorio(entorno_monitor, t
     assert f"enlace simbólico → {afuera}" in entorno_monitor.eventos[0]["detalles_diff"]
     assert not os.path.lexists(enlace)
     assert os.listdir(afuera) == ["x.txt"]
+
+
+# --- Un enlace nuevo respeta el modo aprobación y las ventanas de mantenimiento ---
+
+def test_en_modo_aprobacion_un_enlace_nuevo_se_registra_y_espera_la_decision(entorno_monitor, tmp_path, monkeypatch):
+    monkeypatch.setattr("config.MODO_RESTAURACION", "aprobacion")
+    entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n")
+    afuera = tmp_path / "afuera.txt"
+    afuera.write_text("archivo de afuera\n")
+    enlace = entorno_monitor.ruta("atajo.conf")
+    os.symlink(afuera, enlace)
+
+    entorno_monitor.evento_creado(enlace)
+    entorno_monitor.evento_modificado(enlace)   # un segundo aviso del mismo enlace no repite el registro
+
+    assert os.path.islink(enlace)   # no se borra sin que alguien decida
+    assert entorno_monitor.tipos_de_evento() == ["CREADO"]
+    assert entorno_monitor.avisos == [{"tipo": "evento", "evento_id": 1, "resultado": "PENDIENTE"}]
+
+    # Aceptarlo no se puede (la baseline no admite enlaces); restaurar es quitar el enlace
+    assert monitor_fim.ejecutar_decision(entorno_monitor.decision(1, monitor_fim.ACEPTAR)) == "RECHAZADA"
+    assert os.path.islink(enlace)
+    assert monitor_fim.ejecutar_decision(
+        entorno_monitor.decision(1, monitor_fim.RESTAURAR, decision_id=2)) == "EJECUTADA"
+    assert not os.path.lexists(enlace)
+    assert afuera.read_text() == "archivo de afuera\n"
+    assert entorno_monitor.tipos_de_evento() == ["CREADO", "RESTAURADO"]
+    assert "con aprobación de rodrigo (telegram)" in entorno_monitor.eventos[1]["detalles_diff"]
+
+
+def test_en_una_ventana_de_mantenimiento_un_enlace_nuevo_se_registra_y_no_se_quita(entorno_monitor, tmp_path):
+    entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n")
+    afuera = tmp_path / "afuera.txt"
+    afuera.write_text("archivo de afuera\n")
+    enlace = entorno_monitor.ruta("atajo.conf")
+    os.symlink(afuera, enlace)
+    entorno_monitor.ventanas.append((7, entorno_monitor.directorio))
+
+    entorno_monitor.evento_creado(enlace)
+
+    assert os.path.islink(enlace)
+    assert entorno_monitor.tipos_de_evento() == ["CREADO"]
+    assert "ventana de mantenimiento #7" in entorno_monitor.eventos[0]["detalles_diff"]
+    assert f"enlace simbólico → {afuera}" in entorno_monitor.eventos[0]["detalles_diff"]
+    assert entorno_monitor.avisos == [{"tipo": "evento", "evento_id": 1, "resultado": "AUTORIZADO"}]
