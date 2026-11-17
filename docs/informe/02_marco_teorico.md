@@ -3,7 +3,8 @@
 Este capítulo presenta los conceptos en los que se apoya el sistema: la integridad como objetivo de
 seguridad, las funciones hash, las dos formas de monitorear la integridad de archivos, la respuesta
 ante un cambio, la orquestación con intervención humana, las métricas con que se evalúa, el principio
-de mínimo privilegio y la exposición segura de un servicio a internet.
+de mínimo privilegio y la exposición segura de un servicio a internet. Cierra con el estado del
+arte: los antecedentes, una comparación de las herramientas existentes y el aporte de este trabajo.
 
 ## 2.1 Seguridad de la información y la tríada CIA
 
@@ -50,7 +51,7 @@ recorrido. Con un período de una hora, por ejemplo, la espera media es de unos 
 
 Los sistemas Linux incluyen el subsistema **inotify**, que permite a un programa suscribirse a un
 directorio y recibir notificaciones del kernel cuando se crea, modifica, borra, mueve o cambia de
-atributos un archivo (The Linux man-pages project, 2026). Con este enfoque no hay que esperar al siguiente
+atributos un archivo (The Linux man-pages project, 2026b). Con este enfoque no hay que esperar al siguiente
 ciclo: el programa se entera del cambio en el momento en que ocurre.
 
 La biblioteca **watchdog** de Python ofrece una interfaz de alto nivel sobre inotify y entrega los
@@ -98,7 +99,10 @@ La respuesta ante un cambio puede incluir dos acciones:
 
 Las plataformas de orquestación, automatización y respuesta de seguridad (SOAR, por sus siglas en
 inglés) coordinan las acciones que siguen a una alerta: enriquecerla con información, notificar,
-ejecutar acciones y registrar lo actuado. Esas secuencias se describen como **playbooks**. En este
+ejecutar acciones y registrar lo actuado. La guía de respuesta a incidentes del NIST las menciona,
+junto con las de gestión de eventos (SIEM), entre las herramientas para vigilar y correlacionar
+eventos, y describe los **playbooks** como procedimientos documentados en forma de pasos o tareas
+concretas para cada escenario (Nelson et al., 2025). En este
 trabajo se utiliza n8n, una herramienta de automatización de flujos de trabajo distribuida con una
 licencia *fair-code*, que permite instalarla en un equipo propio (n8n, s.f.), para implementar dos
 playbooks: uno de detección y respuesta, y otro de
@@ -110,14 +114,19 @@ Una decisión central en la respuesta automatizada es cuánto se deja en manos d
 - **Respuesta con aprobación humana:** evita ese error, pero el archivo alterado sigue activo mientras
   se espera la decisión.
 
-Los diseños con intervención humana (*human-in-the-loop*) combinan ambas: automatizan lo reversible y
-dejan a una persona las decisiones que cambian lo que se considera confiable. Para que esa
+En este trabajo se llama diseño con intervención humana (*human-in-the-loop*) al que combina ambas:
+automatiza lo reversible y deja a una persona las decisiones que cambian lo que se considera
+confiable. La misma guía recomienda revisar a mano los eventos que la automatización no alcanza a
+vigilar (Nelson et al., 2025). Para que esa
 intervención sea práctica, la decisión debe poder tomarse desde la propia alerta y quedar registrada
 junto con quién la tomó.
 
 ## 2.6 Métricas de detección y respuesta
 
-Para evaluar un sistema de detección y respuesta se usan, entre otras, las siguientes métricas:
+Para evaluar un sistema de detección y respuesta se usan, entre otras, las siguientes métricas. MTTD
+y MTTR son denominaciones de uso extendido en la práctica profesional; como aquí no se adopta la
+definición de una fuente en particular, lo que vale son las definiciones operativas de la
+sección 3.3:
 
 - **MTTD** (*Mean Time To Detect*, tiempo medio de detección): tiempo entre que ocurre el cambio y que
   el sistema lo detecta y lo registra.
@@ -173,3 +182,68 @@ aplican varias capas de protección:
 
 Estas medidas se complementan: ninguna alcanza por sí sola, y la implementación descripta en el
 Capítulo 4 las combina.
+
+## 2.9 Estado del arte: herramientas de monitoreo de integridad
+
+### Antecedentes
+
+La verificación de integridad de archivos como técnica de detección de intrusiones se remonta a
+Tripwire, presentado por Kim y Spafford (1994) como un verificador de integridad del sistema de
+archivos. Las revisiones recientes muestran que el tema sigue vigente. Peddoju et al. (2020) revisan
+las herramientas de monitoreo de integridad disponibles y los enfoques que usan, y lo justifican en
+que la mayoría de los ataques accede a archivos sensibles y luego altera los registros del sistema
+para ocultarse. Salman et al. (2022) estudian los verificadores de integridad dentro de los sistemas
+de detección de intrusiones basados en host y señalan un punto débil común: la detección depende de
+una base de referencia, y quien pueda modificarla evade el control; revisan las técnicas para
+protegerla y concluyen que ninguna es infalible. Ese problema es el que en este trabajo se trata con
+la verificación de la bóveda contra la línea base y con las limitaciones declaradas en el
+Capítulo 6.
+
+En el plano normativo, el control SI-7 del catálogo NIST SP 800-53 pide emplear herramientas de
+verificación de integridad para detectar cambios no autorizados y definir qué acciones se toman
+cuando se detectan. Sus mejoras contemplan la notificación automática al personal cuando hay
+discrepancias (SI-7(2)), la respuesta automática, que puede incluir revertir los cambios (SI-7(5)),
+y la integración de la detección con la capacidad de respuesta a incidentes (SI-7(7)) (Joint Task
+Force, 2020). La guía de respuesta a incidentes NIST SP 800-61 señala, por su parte, que muchas
+organizaciones documentan sus procedimientos como *playbooks*, y recomienda usar herramientas de
+gestión de eventos y de orquestación (SIEM y SOAR) para vigilar y correlacionar los eventos (Nelson
+et al., 2025).
+
+### Comparación de herramientas
+
+La Tabla 2.1 compara las herramientas y mecanismos más citados con el sistema de este trabajo. Cada
+celda resume lo que dice la documentación que se indica en la primera columna; un guion significa
+que esa fuente no describe la función, no que la herramienta no pueda cumplirla con otros
+componentes.
+
+**Tabla 2.1.** Herramientas y mecanismos de monitoreo de integridad, según su documentación.
+
+| Herramienta (fuente) | Enfoque de detección | Evidencia diferencial | Respuesta | Orquestación | Costo de adopción |
+|---|---|---|---|---|---|
+| Tripwire (Kim y Spafford, 1994; Tripwire, s.f.) | Compara el sistema de archivos con una base de datos al ejecutar la verificación | Informa altas, bajas y cambios de las propiedades vigiladas | — | — | Herramienta para sistemas tipo UNIX; política, configuración y claves firmadas con `twadmin` |
+| AIDE (AIDE, s.f.) | Compara con una base de datos creada desde `aide.conf` (`--init`, `--check`) | Atributos y hashes que cambiaron | — (reemplazar la base de datos es una operación manual) | — | Una base de datos y el archivo de configuración `aide.conf` |
+| OSSEC, módulo syscheck (OSSEC, s.f.) | Escaneo periódico (cada 6 horas por defecto) y opción de tiempo real con inotify | Diff de archivos de texto con `report_changes` | — | El servidor (*manager*) guarda los hashes y genera la alerta | Agente y servidor |
+| Wazuh, módulo FIM (Wazuh Inc., s.f.-a, s.f.-b, s.f.-c, s.f.-d) | Escaneos programados y tiempo real; *who-data* con Audit o eBPF | Contenido que cambió en archivos de texto (`report_changes`); usuario y proceso (*who-data*) | Módulo de respuesta activa: ejecuta scripts en el equipo ante una alerta | La respuesta se dispara por alertas, según la regla, el nivel o el grupo | Agentes y servidor de la plataforma |
+| Samhain (Wichmann, s.f.) | Escaneos completos programados; inotify opcional desde la versión 3.0, con informes inmediatos | Puede guardar el contenido de archivos chicos para ver qué cambió; no informa el diff | Prevé llamar a programas externos | Servidor de registros central (*yule*) | Un equipo o cliente y servidor |
+| auditd (Red Hat, 2021, 2023) | Reglas del subsistema de auditoría del kernel sobre accesos a archivos y directorios (lectura, escritura, ejecución, atributos) | Registra los accesos y permite informarlos por usuario; las páginas no mencionan contenido ni hashes | — | — | Reglas con `auditctl`; revisión con `ausearch` y `aureport` |
+| fanotify (The Linux man-pages project, 2026a) | Interfaz del kernel de notificación e intercepción de eventos del sistema de archivos | — (es una interfaz, no una herramienta) | Los eventos de permiso permiten autorizar o denegar un acceso | — | Requiere programar contra la interfaz |
+| Enfoques con eBPF (eBPF.io, s.f.; Tetragon, s.f.) | Programas en el kernel; Tetragon observa el acceso a archivos con ganchos y filtra en el kernel | Proceso que accedió y operación; no el contenido | — | — | Privilegios para cargar programas eBPF |
+| Este trabajo | Eventos de inotify como disparador y comparación con una línea base en PostgreSQL; escaneo al arrancar | Hashes anterior y nuevo, copia del archivo y diff de texto | Restauración desde una copia verificada, cuarentena, modo de aprobación y ventanas de mantenimiento | n8n y Telegram: la persona decide desde la alerta y el monitor ejecuta | Un equipo: Python, PostgreSQL y n8n |
+
+### Brecha y aporte
+
+De la comparación surge que la detección en tiempo real y el diff de archivos de texto no son
+novedades: OSSEC y Wazuh los ofrecen, y Wazuh agrega una respuesta activa basada en scripts. También
+la norma contempla revertir los cambios de forma automática (SI-7(5)). Lo que la documentación
+consultada no describe como un conjunto ya resuelto en una herramienta liviana, de un solo equipo,
+es la combinación de tres cosas: la restauración automática desde una copia verificada contra la
+línea base, la decisión de una persona tomada desde la propia alerta (confirmar el incidente,
+restaurar o aceptar el cambio) con efecto sobre la línea base, y el registro de solo-agregar de todo
+el recorrido. Las plataformas que más se acercan lo hacen con una arquitectura de agente y servidor.
+
+El aporte de este trabajo es, entonces, de integración y de medición, no un algoritmo nuevo: reúne
+mecanismos conocidos (inotify, hashes, diff, restauración atómica, orquestación con aprobación
+humana) en un sistema chico y verificable, documenta las decisiones de diseño y sus límites, y mide
+con datos propios los tiempos de detección, restauración, alerta y decisión. La comparación de la
+Tabla 2.1 se basa en documentación y no en pruebas de esas herramientas, que no se instalaron ni se
+midieron en este trabajo.
