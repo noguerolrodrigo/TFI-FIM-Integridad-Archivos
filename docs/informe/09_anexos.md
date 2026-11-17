@@ -100,8 +100,9 @@ DIR_LOGS=./logs
 # Temporales de editores que no se vigilan, separados por ","
 PATRONES_IGNORADOS=*.swp,*.swo,*.swx,*~,*.tmp
 
-# automatica: el monitor restaura solo. aprobacion: registra, guarda la evidencia y espera la
-# decisión de una persona (botones de Telegram o enlace local de la alerta; sin n8n, restaurar.py)
+# automatica: el monitor restaura solo.
+# aprobacion: registra, guarda la evidencia y espera la decisión de una persona
+# (botones de Telegram o enlace local de la alerta; sin n8n, restaurar.py).
 MODO_RESTAURACION=automatica
 
 # Aviso a n8n después de cada evento (vacío = no se avisa). El secreto viaja en el header X-FIM-Secreto.
@@ -123,7 +124,10 @@ TELEGRAM_WEBHOOK_SUFIJO=
 ## Anexo D: Fragmentos clave del código
 
 Se transcriben los fragmentos que implementan las decisiones centrales del Capítulo 4, tomados de la
-versión final (Anexo A). Donde se omitieron líneas, se indica con `# [...]`.
+versión final (Anexo A). Donde se omitieron líneas, se indica con `# [...]`. En el repositorio
+algunas líneas superan los 90 caracteres; para que entren en la página sin cortes arbitrarios, en
+los anexos se parten y la continuación empieza con la marca `»`, que no forma parte del código. En
+los comentarios, la continuación repite el signo de comentario.
 
 ### D.1 Clasificación del cambio contra la línea base (`monitor_fim.py`, líneas 197–217)
 

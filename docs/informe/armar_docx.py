@@ -220,6 +220,40 @@ def escribir_inline(p, texto, tamano=12, negrita_base=False, cursiva_base=False,
         _fuente(run, tamano=tamano, negrita=negrita_base or None, cursiva=cursiva_base or None)
 
 
+# ---------------------------------------------------------------- líneas de código largas
+
+LARGO_MAXIMO_CODIGO = 90
+MARCA_CONTINUACION = "» "   # no es parte del código: indica que la línea sigue de la anterior
+
+
+def partir_linea_de_codigo(linea, limite=LARGO_MAXIMO_CODIGO):
+    """Parte una línea de código de más de `limite` caracteres en varias que entran en la página.
+
+    Cada continuación conserva la sangría de la línea original. Si la línea es un comentario
+    (#, -- o //), la continuación repite la marca de comentario, de modo que el texto copiado siga
+    siendo válido (por ejemplo, en un .env). Si es código, la continuación empieza con "» ".
+    Se corta en un espacio siempre que se pueda.
+    """
+    if len(linea) <= limite:
+        return [linea]
+    sangria = linea[:len(linea) - len(linea.lstrip())]
+    resto = linea.lstrip()
+    marca = next((m + " " for m in ("#", "--", "//") if resto.startswith(m)), None)
+    prefijo = sangria + (marca if marca else "    " + MARCA_CONTINUACION)
+    partes = []
+    actual = linea
+    while len(actual) > limite:
+        # El corte no puede caer dentro de la sangría ni del prefijo
+        minimo = len(prefijo) + 10
+        corte = actual.rfind(" ", minimo, limite + 1)
+        if corte == -1:
+            corte = limite
+        partes.append(actual[:corte].rstrip())
+        actual = prefijo + actual[corte:].lstrip()
+    partes.append(actual)
+    return partes
+
+
 # ---------------------------------------------------------------- bloques de Markdown
 
 def leer_bloques(ruta):
@@ -371,21 +405,26 @@ class Armador:
             return
         while lineas and not lineas[-1].strip():
             lineas.pop()
-        # Caben unos 83 caracteres a 9 pt, 94 a 8 pt y 107 a 7 pt en el ancho útil
+        # Una fuente monoespaciada ocupa 0,6 veces su tamaño por carácter. Con el ancho útil menos
+        # la sangría del bloque (443 pt) entran 82 caracteres a 9 pt y 92 a 8 pt. Antes se suponía
+        # que entraban más y el procesador de texto cortaba las líneas largas donde podía: la
+        # continuación perdía el "#" de los comentarios y la sangría de Python. Ahora las líneas de
+        # más de LARGO_MAXIMO_CODIGO caracteres se parten acá, de forma controlada.
+        lineas = [parte for linea in lineas for parte in partir_linea_de_codigo(linea.replace("\t", "    "))]
         largo = max((len(l) for l in lineas), default=0)
-        tamano = 9 if largo <= 83 else 8 if largo <= 94 else 7
+        tamano = 9 if largo <= 80 else 8
         # Un bloque corto no se parte; en uno largo solo se evita que queden 3 líneas sueltas
         juntas = len(lineas) if len(lineas) <= 12 else 3
         for k, linea in enumerate(lineas):
             p = self.doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
             _set_spacing(p, 0, 0, 1.0)
-            p.paragraph_format.left_indent = Pt(8)
-            p.paragraph_format.right_indent = Pt(8)
+            p.paragraph_format.left_indent = Pt(4)
+            p.paragraph_format.right_indent = Pt(4)
             if k < juntas - 1:
                 _mantener_con_siguiente(p)
             _sombrear(p._element.get_or_add_pPr(), GRIS_CODIGO)
-            run = p.add_run(linea.replace("\t", "    ") or " ")
+            run = p.add_run(linea or " ")
             _fuente(run, nombre=FUENTE_CODIGO, tamano=tamano)
         # Separación después del bloque
         p.paragraph_format.space_after = Pt(12)
