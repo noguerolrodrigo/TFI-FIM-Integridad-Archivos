@@ -146,7 +146,7 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   anotado en la fila `RESTAURADO` y ese cambio no se puede aceptar.
 - **Enlaces simbólicos no soportados.** No entran en la baseline y el monitor elimina los que
   encuentra (el enlace, no el destino). No apuntar a `/etc` tal como está: tiene enlaces legítimos
-  (765 en el equipo de desarrollo).
+  (765 en el equipo de pruebas, con `find /etc -type l | wc -l`).
 - **Carrera residual al restaurar.** Entre el `realpath` de la carpeta y la creación del temporal
   quedan microsegundos en los que la carpeta puede cambiarse por un enlace. Cerrarlo pide `dir_fd`;
   se decidió no implementarlo y declararlo.

@@ -13,7 +13,7 @@ un entorno productivo y las líneas de trabajo futuro que surgen de las limitaci
    tres condiciones. Primero, que el directorio vigilado no contenga enlaces simbólicos legítimos, o
    que antes se implemente su soporte en la línea base (sección 7.2): con la versión actual, el
    monitor eliminaría los enlaces que encuentre, por lo que no debe apuntarse a `/etc` tal como está
-   (en el equipo de desarrollo contiene 765 enlaces). Segundo, que se cierre el intervalo entre la
+   (en el equipo de pruebas, `find /etc -type l | wc -l` contó 765 enlaces). Segundo, que se cierre el intervalo entre la
    comprobación de la carpeta y la escritura (secciones 6.4 y 7.2), o que nadie más que el
    administrador pueda escribir en los directorios vigilados. Tercero, que se evalúe el monitor
    vigilando directorios del sistema, algo que no formó parte de este trabajo.

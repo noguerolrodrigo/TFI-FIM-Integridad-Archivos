@@ -18,8 +18,11 @@ mediana de 5,4 ms y la restauración, de 45,4 ms, dominada por la escritura en l
 alerta llegó a Telegram con una mediana de 1,11 s, en diez alertas con el bot real. El filtro de
 archivos temporales bajó la proporción de alertas espurias al editar con dos editores del 50,0 % y
 el 66,7 % al 0 %. Con un
-escaneo por minuto, la detección media estimada sería de unos 30 s. Los resultados corresponden a un
-único entorno y sus limitaciones se detallan en el informe.
+escaneo por minuto, la detección media estimada sería de unos 30 s. En la segunda instancia de
+evaluación se corrigieron defectos de seguridad en la restauración; una nueva corrida sobre la
+versión corregida no mostró cambios distinguibles en estas métricas, salvo en la restauración de un
+archivo binario de 1 MB, unos 3 ms más lenta. Los resultados corresponden a un único entorno y sus
+limitaciones se detallan en el informe.
 
 **Palabras clave:** monitoreo de integridad de archivos, FIM, inotify, SHA-256, evidencia
 diferencial, respuesta ante incidentes, n8n.

@@ -61,6 +61,12 @@ filtro, el 50,0 % de las alertas con vim y el 66,7 % con nano fueron espurias, t
 de intercambio de los editores; con el filtro, ninguna lo fue. A cambio, un archivo malicioso con un
 nombre que coincida con un patrón ignorado no se detecta.
 
+**Las correcciones de la segunda instancia no cambiaron estos resultados.** Después de la primera
+evaluación se corrigieron defectos de seguridad en la restauración y en el tratamiento de los enlaces
+simbólicos (secciones 4.3 y 4.4). Una nueva corrida sobre la versión corregida no mostró cambios
+distinguibles en las métricas, salvo en el archivo binario de 1 MB, cuya restauración resultó unos
+3 ms más lenta (sección 5.9). Los valores principales de este capítulo siguen siendo los de octubre.
+
 **Separar decidir de ejecutar simplificó la seguridad.** Como n8n solo registra decisiones y el monitor
 es el único componente que modifica archivos, no fue necesario habilitar en n8n la ejecución de
 comandos, cada componente usa una cuenta de base de datos con permisos mínimos, y desde internet solo
@@ -89,8 +95,8 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
   línea base saltea los enlaces y los lista, y el monitor trata como no autorizado cualquier enlace
   que encuentre en un directorio vigilado: lo registra con su destino y lo elimina (en modo de
   aprobación, cuando la persona lo decide). Esto impide vigilar tal como está un directorio que
-  contenga enlaces legítimos. Es el caso de `/etc`: en el equipo de desarrollo, `find /etc -type l`
-  encuentra 765 enlaces, entre ellos `/etc/resolv.conf` y `/etc/mtab`.
+  contenga enlaces legítimos. Es el caso de `/etc`: en el equipo de pruebas, el comando
+  `find /etc -type l | wc -l` contó 765 enlaces, entre ellos `/etc/resolv.conf` y `/etc/mtab`.
 - **Archivo nuevo movido por nombre.** Un archivo que no figura en la línea base se mueve a
   cuarentena por su nombre, porque un renombrado no se puede hacer sobre un descriptor. El movimiento
   no sigue enlaces, pero si el archivo se reemplaza entre el cálculo del hash y el movimiento, lo que
