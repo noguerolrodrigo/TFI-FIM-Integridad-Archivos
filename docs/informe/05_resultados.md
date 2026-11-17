@@ -207,9 +207,8 @@ realizaron 30 cambios en instantes aleatorios: la detección media medida fue de
 compatible con la variabilidad esperable en una muestra de 30 cambios: si la espera hasta el
 siguiente escaneo se distribuye de manera uniforme entre 0 y 10 s, su desvío estándar es
 10/√12 ≈ 2,89 s (el desvío de la muestra fue de 2,83 s) y el error estándar de la media de 30
-cambios es 2,89/√30 ≈ 0,53 s. La diferencia observada equivale a 1,1 errores estándar, por debajo
-de los dos que se toman habitualmente como umbral para considerar que una media se aparta de lo
-esperado (fuente: `resultados/escaneo_periodico_20261015_235418.csv`).
+cambios es 2,89/√30 ≈ 0,53 s. La diferencia observada equivale a 1,1 errores estándar (fuente:
+`resultados/escaneo_periodico_20261015_235418.csv`).
 
 **Tabla 5.8.** Detección estimada para distintos períodos de escaneo, con el S medido.
 
