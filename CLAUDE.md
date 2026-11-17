@@ -122,7 +122,7 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - El tribunal devolvió el TFI el 17/11/2026 (`docs/devolucion_primera_instancia.pdf`): hallazgos C1,
   M1, M2, M3, m1–m9 y f1–f6. La respuesta por ID va en el Anexo I del informe.
 - M2 y m8 se corrigieron en 11 commits de código del 17/11/2026. **El código de la aplicación quedó
-  cerrado en `39c661c`** (193 tests). El informe distingue dos versiones: `81b1bc8` (medida en
+  cerrado en `39c661c`** (193 tests; 196 con los 3 de `scripts/intervalos_bootstrap.py`). El informe distingue dos versiones: `81b1bc8` (medida en
   octubre, secciones 5.1 a 5.8) y `39c661c` (final, sección 5.9).
 - Mediciones repetidas sobre `39c661c` el 17/11/2026: dos corridas de `medir_metricas.py` (B1 y B2)
   y una de `medir_falsos_positivos.py`. No se repitieron la muestra con Telegram real ni el escaneo

@@ -493,7 +493,8 @@ webhook de Telegram sin mostrar los secretos en pantalla.
 
 El proyecto cuenta con 193 pruebas automatizadas con pytest, que se ejecutan desde la raíz del
 repositorio (162 en la versión de octubre y 31 agregadas con las correcciones de la segunda
-instancia). Cubren, entre otros aspectos:
+instancia). El repositorio tiene además 3 pruebas del script de análisis de intervalos de confianza,
+que no es parte de la aplicación: en total, 196. Cubren, entre otros aspectos:
 
 - la bóveda (restauración de binarios y permisos, restauración atómica, archivos sin respaldo);
 - la clasificación de eventos y la respuesta a cada tipo, incluidos los movimientos y el reemplazo

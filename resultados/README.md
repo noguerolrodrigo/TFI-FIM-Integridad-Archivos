@@ -221,3 +221,10 @@ Restauración en disco por caso (mediana / p95):
   repetición 15) y 65,9 ms en B2.
 - **Alertas espurias:** mismos resultados que en octubre. Con el filtro, 0 alertas espurias en 20
   ediciones con vim y 20 con nano; sin el filtro, 20 de 40 (vim) y 40 de 60 (nano).
+
+## 7. Intervalos de confianza de las medianas de octubre
+
+`scripts/intervalos_bootstrap.py` calcula, sobre los CSV de octubre, un intervalo de confianza del
+95 % para cada mediana principal (bootstrap por percentiles, 10.000 remuestras, semilla 2026;
+estratificado por caso en las medianas conjuntas). No mide nada nuevo. La tabla está en
+`intervalos_bootstrap_20261015.md` y los valores, en `intervalos_bootstrap_20261015.csv`.

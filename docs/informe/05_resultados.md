@@ -401,3 +401,51 @@ En síntesis, las correcciones no cambiaron la detección ni la alerta de forma 
 restauración de archivos chicos quedó en los mismos valores, y la del archivo de 1 MB es unos 3 ms
 más lenta. Las conclusiones del capítulo se mantienen con los valores de octubre, que son los de la
 versión auditada.
+
+## 5.10 Intervalos de confianza de las medianas
+
+Las medianas informadas en este capítulo son estimaciones hechas con muestras de entre 10 y 250
+valores. Para mostrar cuánta incertidumbre tienen, se calculó para cada una un intervalo de
+confianza del 95 % por bootstrap (el método se describe en la sección 3.6). El cálculo se hizo
+sobre los datos de octubre, sin medir nada nuevo.
+
+**Tabla 5.13.** Intervalos de confianza del 95 % de las medianas principales (corridas de octubre), en ms.
+
+| Medida | n | Mediana | IC 95 % |
+|---|---:|---:|---:|
+| Detección (MTTD), cinco casos | 250 | 5,4 | 5,2 a 5,6 |
+| Detección (MTTD), texto (2 KB) | 50 | 5,6 | 5,3 a 5,9 |
+| Detección (MTTD), binario (1 MB) | 50 | 7,2 | 7,0 a 7,4 |
+| Detección (MTTD), permisos | 50 | 5,2 | 4,9 a 5,5 |
+| Detección (MTTD), borrado | 50 | 4,7 | 4,2 a 5,1 |
+| Detección (MTTD), archivo nuevo | 50 | 4,8 | 4,4 a 5,3 |
+| Restauración en disco, cinco casos | 250 | 45,4 | 45,0 a 45,9 |
+| Restauración en disco, texto (2 KB) | 50 | 47,3 | 46,2 a 48,0 |
+| Restauración en disco, binario (1 MB) | 50 | 52,3 | 51,7 a 52,9 |
+| Restauración en disco, permisos | 50 | 44,3 | 43,7 a 45,0 |
+| Restauración en disco, borrado | 50 | 45,1 | 43,1 a 46,0 |
+| Restauración en disco, archivo nuevo | 50 | 44,4 | 43,0 a 45,0 |
+| Alerta con Telegram simulado, cinco casos | 250 | 124,7 | 123,8 a 127,0 |
+| Ejecución de una decisión | 50 | 938,6 | 593,9 a 1.349,7 |
+| COMMIT con el disco en reposo | 50 | 37,9 | 37,5 a 38,4 |
+| COMMIT en ráfaga | 50 | 1,8 | 1,5 a 1,9 |
+| Alerta con Telegram real | 10 | 1.105,4 | 1.010,9 a 1.202,0 |
+| Escritura a alerta con Telegram real | 10 | 1.109,5 | 1.017,1 a 1.207,6 |
+| Escaneo completo de 719 archivos (S) | 20 | 9,7 | 9,4 a 9,8 |
+| Detección con escaneo cada 10 s | 30 | 4.292,0 | 2.341,7 a 5.970,7 |
+
+*Fuente: `resultados/intervalos_bootstrap_20261015.csv`, generado por
+`scripts/intervalos_bootstrap.py` (10.000 remuestras, semilla 2026) a partir de los CSV de las
+secciones 5.2 a 5.6.*
+
+Los intervalos de la detección, la restauración, la alerta simulada y el COMMIT son angostos: la
+mediana de detección queda entre 5,2 y 5,6 ms y la de restauración, entre 45,0 y 45,9 ms. En
+cambio, son anchos donde la medida es dispersa por su naturaleza o la muestra es chica. La
+ejecución de una decisión depende del momento del ciclo de consulta de 2 s en que llega, y su
+mediana puede estar entre 0,59 y 1,35 s. Lo mismo ocurre con la detección del escáner de 10 s (entre
+2,3 y 6,0 s, un intervalo que contiene los 5,0 s que predice la fórmula). La alerta con el bot real,
+con solo diez repeticiones, tiene una mediana que puede estar entre 1,01 y 1,20 s.
+
+El intervalo indica la incertidumbre de la mediana en las condiciones de la corrida. No cubre la
+variación entre corridas ni entre equipos: la sección 5.9 muestra que la mediana de restauración de
+una corrida completa puede quedar fuera de este intervalo cuando cambia el régimen del disco.

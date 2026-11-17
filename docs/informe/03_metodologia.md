@@ -83,7 +83,8 @@ provienen del mismo reloj y no hay desfase entre ellas.
 
 El comportamiento del sistema se verificó con 193 pruebas automatizadas (pytest); eran 162 en la
 versión medida en octubre, y las 31 restantes acompañan las correcciones de la segunda instancia
-(sección 5.9). Las pruebas del
+(sección 5.9). Otras 3 pruebas cubren el script de análisis de intervalos de confianza, con lo que el
+repositorio tiene 196. Las pruebas del
 monitor usan una línea base en memoria para no depender de la base de datos; las de integración se
 ejecutan sobre una base separada (`fim_pruebas`), que un script reconstruye con el mismo esquema que
 la base productiva. Además se realizaron pruebas de punta a punta con el monitor real, una instancia
@@ -175,6 +176,7 @@ su plan gratuito.
 | `scripts/medir_falsos_positivos.py` | Alertas espurias con vim 9.1 y nano 7.2 |
 | `scripts/medir_escaneo_periodico.py` | Duración de un escaneo completo y escáner periódico de 10 s |
 | `scripts/resumir_metricas.py` | Estadísticos y gráficos a partir de los CSV |
+| `scripts/intervalos_bootstrap.py` | Intervalos de confianza de las medianas, por bootstrap |
 | `scripts/armar_readme_resultados.py` | Resumen general de resultados a partir de los CSV |
 
 Las pruebas automatizadas usan pytest, y los gráficos, matplotlib 3.11.2.
@@ -186,6 +188,12 @@ Las pruebas automatizadas usan pytest, y los gráficos, matplotlib 3.11.2.
 - **Estadísticos.** Para cada caso y métrica se calculan la media, la mediana, el percentil 95 (p95,
   con interpolación lineal entre los valores más cercanos), el mínimo y el máximo. Se informa la
   mediana como medida principal porque es menos sensible a valores atípicos.
+- **Intervalos de confianza.** Para las medianas principales se calcula un intervalo de confianza
+  del 95 % por bootstrap de percentiles: de cada muestra de n valores se extraen 10.000 muestras de n
+  valores con reposición, se calcula la mediana de cada una y se toman los percentiles 2,5 y 97,5 de
+  esas medianas. Cuando la mediana es la conjunta de varios casos, se remuestrea dentro de cada caso.
+  La semilla es fija (2026). El bootstrap no supone una forma para la distribución, lo que conviene
+  aquí porque los tiempos tienen valores atípicos y, en la restauración, dos grupos de valores.
 - **Valores atípicos y faltantes.** No se descarta ningún valor. Los atípicos se mantienen en los datos
   y en los estadísticos, y se analizan por separado. Los faltantes se cuentan y se informan.
 - **Reproducibilidad.** Los resúmenes, los gráficos y el resumen general se generan con scripts a partir

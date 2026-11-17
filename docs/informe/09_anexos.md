@@ -64,7 +64,7 @@ corresponden a ella.
 | `sql/` | Migraciones de la base de datos, numeradas de la 01 a la 06. |
 | `n8n/` | Workflows de n8n en JSON, scripts para iniciar n8n y el túnel ngrok, política del túnel y guía de instalación. |
 | `scripts/` | Base de datos de pruebas, n8n de pruebas con Telegram simulado y scripts de medición y resumen. |
-| `tests/` | 193 tests automatizados (pytest). |
+| `tests/` | 196 tests automatizados (pytest): 193 de la aplicación y 3 del script de intervalos de confianza. |
 | `resultados/` | Mediciones en CSV, resúmenes, gráficos y descripción del entorno. |
 | `directorio_prueba/` | Directorio vigilado en las pruebas. |
 | `docs/` | Documentos de referencia y los capítulos de este informe. |
@@ -755,6 +755,9 @@ python scripts/medir_metricas.py --telegram-real --repeticiones 10
 # Resumen (media, mediana, p95, mínimo y máximo) y gráfico de las métricas; README de resultados
 python scripts/resumir_metricas.py resultados/metricas_<fecha>.csv
 python scripts/armar_readme_resultados.py
+
+# Intervalos de confianza de las medianas (sobre los CSV de octubre)
+python scripts/intervalos_bootstrap.py
 ```
 
 ## Anexo H: Resultados versionados
@@ -784,4 +787,5 @@ la sección 5.9.
 | `grafico_20261117_195343.png` y `grafico_20261117_200705.png` | Gráficos de cajas de B1 y B2. |
 | `entorno_metricas_20261117_195343.json` y `entorno_metricas_20261117_200705.json` | Entorno de B1 y B2. |
 | `falsos_positivos_20261117_200051.csv` y `resumen_falsos_positivos_20261117_200051.md` | Ediciones con vim y nano sobre la versión corregida. |
+| `intervalos_bootstrap_20261015.csv` / `.md` | Intervalos de confianza del 95 % de las medianas de octubre (sección 5.10). |
 | `README.md` | Lectura de los resultados, comparación con la tabla supuesta del documento de diseño y comparación entre la versión de octubre y la corregida (sección 6). |

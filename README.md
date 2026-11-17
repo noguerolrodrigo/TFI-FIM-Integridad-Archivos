@@ -199,7 +199,7 @@ el `.env`, el monitor registra y guarda la evidencia pero espera la decisión an
 pytest
 ```
 
-Son 193 tests. Los del monitor usan una baseline en memoria y no necesitan base de datos. Los de
+Son 196 tests (193 de la aplicación y 3 del script de intervalos de confianza). Los del monitor usan una baseline en memoria y no necesitan base de datos. Los de
 conexión se saltean si PostgreSQL no está. `tests/test_integracion_bd.py` usa una base aparte,
 `fim_pruebas`, que se prepara con `scripts/preparar_bd_pruebas.sh`; nunca toca `fim_db`.
 
