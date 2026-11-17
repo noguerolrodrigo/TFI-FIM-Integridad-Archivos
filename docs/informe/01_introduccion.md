@@ -53,7 +53,7 @@ exactas que se agregaron o quitaron. Esto reduce el tiempo de análisis, porque 
 ve qué cambió sin tener que investigarlo a mano.
 
 El trabajo responde, además, a la consigna de la cátedra para el proyecto de integridad de archivos
-(Cortez, 2026), cuyos ejes son la detección de cambios no autorizados, las alertas y la respuesta
+(Cortez y Enferrel, 2026), cuyos ejes son la detección de cambios no autorizados, las alertas y la respuesta
 automatizada.
 
 ## 1.4 Objetivos de la investigación

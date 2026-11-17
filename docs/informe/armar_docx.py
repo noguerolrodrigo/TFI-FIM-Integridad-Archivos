@@ -473,6 +473,9 @@ class Armador:
                 # Una tabla corta no se parte entre páginas; una larga sí (repite el encabezado)
                 if len(filas) <= 6 and r < len(filas) - 1:
                     _mantener_con_siguiente(p)
+                # Un nombre de archivo largo en código solo puede cortarse después de "_" (espacio de
+                # ancho cero), para que no quede partido en cualquier letra
+                contenido = re.sub(r"`[^`]+`", lambda m: m.group(0).replace("_", "_\u200b"), contenido)
                 escribir_inline(p, contenido, tamano, negrita_base=(r == 0), tamano_codigo=tamano - 1)
         # Aire después de la tabla
         p = self.doc.add_paragraph()
@@ -537,6 +540,39 @@ def conservar_portada(doc):
     for t in body.iter(qn("w:t")):
         if t.text and "Rodrigo Jesus Noguerol" in t.text:
             t.text = t.text.replace("Rodrigo Jesus Noguerol", "Rodrigo Jesús Noguerol")
+    # Línea de docentes debajo de la del autor, copiando su formato (etiqueta en negrita, a la derecha)
+    for p in body.iter(qn("w:p")):
+        textos = [t for t in p.iter(qn("w:t")) if t.text]
+        if textos and textos[0].text.strip() == "Autor:":
+            docentes = copy.deepcopy(p)
+            textos = [t for t in docentes.iter(qn("w:t")) if t.text]
+            textos[0].text = "Docentes:"
+            textos[1].text = " Alberto Cortez y Ariel Enferrel"
+            p.addnext(docentes)
+            break
+
+
+def agregar_pie_con_numero(doc):
+    """Pie de página centrado con el campo PAGE. La portada tiene su propio pie, vacío."""
+    seccion = doc.sections[0]
+    seccion.different_first_page_header_footer = True
+    seccion.first_page_footer.paragraphs[0].text = ""
+    p = seccion.footer.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    def fld(tipo):
+        f = OxmlElement("w:fldChar")
+        f.set(qn("w:fldCharType"), tipo)
+        p.add_run()._element.append(f)
+
+    fld("begin")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = " PAGE "
+    p.add_run()._element.append(instr)
+    fld("separate")
+    _fuente(p.add_run("1"), tamano=10)
+    fld("end")
 
 
 def volcar_resumen(armador, ruta):
@@ -560,14 +596,19 @@ def volcar_resumen(armador, ruta):
 
 def volcar_capitulo(armador, ruta):
     es_referencias = os.path.basename(ruta).startswith("08_")
-    for tipo, contenido in leer_bloques(ruta):
+    bloques = leer_bloques(ruta)
+    for k, (tipo, contenido) in enumerate(bloques):
         if tipo == "titulo":
             armador.titulo(*contenido)
         elif tipo == "parrafo":
             if es_referencias and re.search(r"\(\d{4}\)|\(s\.f\.", contenido):
                 armador.referencia(contenido)
             else:
-                armador.parrafo(contenido)
+                p = armador.parrafo(contenido)
+                # Una etiqueta corta que presenta una tabla sin epígrafe baja con la tabla
+                siguiente = bloques[k + 1][0] if k + 1 < len(bloques) else None
+                if siguiente == "tabla" and len(contenido) <= 80:
+                    _mantener_con_siguiente(p)
         elif tipo == "epigrafe":
             armador.epigrafe(contenido)
         elif tipo == "lista":
@@ -589,6 +630,7 @@ def main():
 
     doc = Document(PLANTILLA)
     conservar_portada(doc)
+    agregar_pie_con_numero(doc)
     armador = Armador(doc)
 
     for c in resumen:

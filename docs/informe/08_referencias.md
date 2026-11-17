@@ -5,9 +5,9 @@ citan como "s.f." (sin fecha).
 
 Bishop, M. (2003). *Computer security: Art and science*. Addison-Wesley.
 
-Cortez, A. (2026). *Proyecto 7: Monitoreo Automatizado de Integridad de Archivos (FIM)* [Material de
-cátedra]. Seguridad Ofensiva, Tecnicatura Universitaria en Programación, UTN Facultad Regional
-Mendoza.
+Cortez, A. y Enferrel, A. (2026). *Proyecto 7: Monitoreo Automatizado de Integridad de Archivos
+(FIM)*. Consigna de Trabajo Final Integrador, Tecnicatura Universitaria en Programación, UTN
+Facultad Regional Mendoza.
 
 n8n. (s.f.). *n8n Docs*. https://docs.n8n.io/
 
