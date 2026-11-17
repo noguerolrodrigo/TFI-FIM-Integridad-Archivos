@@ -16,6 +16,7 @@ import re
 import sys
 
 from docx import Document
+from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -50,7 +51,7 @@ ABSTRACT_DECIMAL = 6
 
 # Orden que exige el esquema OOXML para los hijos de pPr y de tblPr (solo los que se usan acá)
 ORDEN_PPR = ["pStyle", "keepNext", "keepLines", "pageBreakBefore", "numPr", "pBdr", "shd", "tabs",
-             "spacing", "ind", "jc", "rPr"]
+             "spacing", "ind", "jc", "outlineLvl", "rPr"]
 ORDEN_TBLPR = ["tblStyle", "tblW", "jc", "tblInd", "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook"]
 
 
@@ -362,6 +363,56 @@ def leer_bloques(ruta):
 
 # ---------------------------------------------------------------- escritura en el documento
 
+PATRON_EPIGRAFE = re.compile(r"^\*\*((Figura|Tabla) [\dA-Z]+\.\d+)\.\*\* (.*)$")
+
+
+# Estilos de párrafo de los epígrafes. No cambian el aspecto: sirven para que los índices de figuras
+# y de tablas (campos TOC \t) junten los párrafos que los llevan.
+ESTILO_EPIGRAFE = {"Figura": "EpigrafeFigura", "Tabla": "EpigrafeTabla"}
+
+
+def partir_epigrafe(epigrafe):
+    """De "**Tabla 5.2.** Tiempo hasta... Para el archivo nuevo..." devuelve
+    ("Tabla", "**Tabla 5.2.** Tiempo hasta...", "Para el archivo nuevo..."): el tipo, el número con
+    la primera oración (lo que va al índice) y el resto del epígrafe (o "")."""
+    numero, tipo, resto = PATRON_EPIGRAFE.match(epigrafe).groups()
+    partes = re.split(r"(?<=\.) ", resto, maxsplit=1)
+    return tipo, f"**{numero}.** {partes[0]}", partes[1] if len(partes) > 1 else ""
+
+
+def entrada_de_indice(epigrafe):
+    tipo, titulo, _ = partir_epigrafe(epigrafe)
+    return tipo, limpiar_markdown(titulo)
+
+
+def _campo(p, instruccion, con_resultado=False):
+    """Agrega al párrafo un campo de Word. Con con_resultado queda abierto: lo que se agregue
+    después es su resultado provisorio, y hay que cerrarlo con _cerrar_campo()."""
+    def fld(tipo):
+        r = OxmlElement("w:r")
+        f = OxmlElement("w:fldChar")
+        f.set(qn("w:fldCharType"), tipo)
+        r.append(f)
+        return r
+
+    p._element.append(fld("begin"))
+    r = OxmlElement("w:r")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = instruccion
+    r.append(instr)
+    p._element.append(r)
+    p._element.append(fld("separate" if con_resultado else "end"))
+
+
+def _cerrar_campo(p):
+    r = OxmlElement("w:r")
+    f = OxmlElement("w:fldChar")
+    f.set(qn("w:fldCharType"), "end")
+    r.append(f)
+    p._element.append(r)
+
+
 class Armador:
     def __init__(self, doc):
         self.doc = doc
@@ -394,14 +445,24 @@ class Armador:
         return p
 
     def epigrafe(self, texto, antes=120, despues=240):
-        p = self.doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _set_spacing(p, antes, despues)
-        if texto.startswith("**Tabla"):
-            # El título de una tabla va arriba y no puede quedar solo al pie de la página
-            _mantener_con_siguiente(p)
-            p.paragraph_format.space_after = Pt(6)
-        escribir_inline(p, texto, tamano=10, cursiva_base=True)
+        # El número y la primera oración van en un párrafo con el estilo que recogen los índices de
+        # figuras y de tablas; si el epígrafe sigue, el resto va en un segundo párrafo igual
+        tipo, titulo, resto = partir_epigrafe(texto)
+        es_tabla = tipo == "Tabla"
+        partes = [(titulo, ESTILO_EPIGRAFE[tipo])] + ([(resto, None)] if resto else [])
+        for k, (parte, estilo) in enumerate(partes):
+            p = self.doc.add_paragraph(style=estilo)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            ultima = k == len(partes) - 1
+            _set_spacing(p, antes if k == 0 else 0, despues if ultima else 0)
+            if es_tabla:
+                # El título de una tabla va arriba y no puede quedar solo al pie de la página
+                _mantener_con_siguiente(p)
+                if ultima:
+                    p.paragraph_format.space_after = Pt(6)
+            elif not ultima:
+                _mantener_con_siguiente(p)
+            escribir_inline(p, parte, tamano=10, cursiva_base=True)
         return p
 
     def lista(self, numerada, items):
@@ -607,6 +668,34 @@ class Armador:
             ultimo = p
         ultimo._element.append(fld("end"))
 
+    def indice_de(self, titulo, estilo, entradas):
+        """Índice de figuras o de tablas: campo TOC que junta los párrafos con ese estilo. Como en
+        el índice general, las entradas quedan escritas como resultado provisorio."""
+        p = self.doc.add_paragraph()
+        _salto_de_pagina_antes(p)
+        _set_spacing(p, 0, 240)
+        _fuente(p.add_run(titulo), tamano=14, negrita=True)
+
+        primero = self.doc.add_paragraph()
+        _set_spacing(primero, 0, 0)
+        _campo(primero, f' TOC \\h \\z \\t "{estilo},1" ', con_resultado=True)
+        ultimo = primero
+        for entrada in entradas:
+            p = self.doc.add_paragraph()
+            _set_spacing(p, 0, 40)
+            _fuente(p.add_run(con_espacio_fino(entrada)), tamano=11)
+            ultimo = p
+        _cerrar_campo(ultimo)
+
+    def lista_de_siglas(self, ruta):
+        p = self.doc.add_paragraph()
+        _salto_de_pagina_antes(p)
+        _set_spacing(p, 0, 240)
+        _fuente(p.add_run("Lista de siglas"), tamano=14, negrita=True)
+        for tipo, contenido in leer_bloques(ruta):
+            if tipo == "tabla":
+                self.tabla(contenido)
+
 
 # ---------------------------------------------------------------- armado del documento
 
@@ -721,6 +810,18 @@ def main():
     cuerpo = [c for c in capitulos if not c.startswith("00_")]
 
     doc = Document(PLANTILLA)
+    por_nombre = {estilo.name: estilo for estilo in doc.styles}
+    for estilo in ESTILO_EPIGRAFE.values():
+        doc.styles.add_style(estilo, WD_STYLE_TYPE.PARAGRAPH).base_style = por_nombre["normal"]
+    # Los estilos de título de la plantilla no declaran su nivel de esquema. Word arma el índice
+    # igual, porque reconoce los estilos por su nombre, pero LibreOffice lo dejaba vacío al
+    # actualizarlo: se declara el nivel de cada uno.
+    for nivel in (1, 2, 3):
+        ppr = por_nombre[f"Heading {nivel}"].element.get_or_add_pPr()
+        if ppr.find(qn("w:outlineLvl")) is None:
+            esquema = OxmlElement("w:outlineLvl")
+            esquema.set(qn("w:val"), str(nivel - 1))
+            _insertar_ordenado(ppr, esquema, ORDEN_PPR)
     conservar_portada(doc)
     agregar_pie_con_numero(doc)
     armador = Armador(doc)
@@ -731,12 +832,19 @@ def main():
 
     # El índice tiene que ir antes de los capítulos, pero necesita sus títulos: se arma al final
     # en un documento aparte y se mueve. Más simple: se recorren los capítulos dos veces.
+    figuras, tablas = [], []
     for c in cuerpo:
         for tipo, contenido in leer_bloques(os.path.join(AQUI, c)):
             if tipo == "titulo":
                 armador.titulos.append((contenido[0], limpiar_markdown(contenido[1])))
+            elif tipo == "epigrafe":
+                clase, entrada = entrada_de_indice(contenido)
+                (figuras if clase == "Figura" else tablas).append(entrada)
     armador.indice()
     armador.titulos = []
+    armador.indice_de("Índice de figuras", ESTILO_EPIGRAFE["Figura"], figuras)
+    armador.indice_de("Índice de tablas", ESTILO_EPIGRAFE["Tabla"], tablas)
+    armador.lista_de_siglas(os.path.join(AQUI, "siglas.md"))
 
     for c in cuerpo:
         volcar_capitulo(armador, os.path.join(AQUI, c))
