@@ -626,15 +626,20 @@ def conservar_portada(doc):
     for t in body.iter(qn("w:t")):
         if t.text and "Rodrigo Jesus Noguerol" in t.text:
             t.text = t.text.replace("Rodrigo Jesus Noguerol", "Rodrigo Jesús Noguerol")
-    # Línea de docentes debajo de la del autor, copiando su formato (etiqueta en negrita, a la derecha)
+    # Debajo de la línea del autor van los directores y el título al que se aspira, copiando su
+    # formato (etiqueta en negrita, a la derecha)
     for p in body.iter(qn("w:p")):
         textos = [t for t in p.iter(qn("w:t")) if t.text]
         if textos and textos[0].text.strip() == "Autor:":
-            docentes = copy.deepcopy(p)
-            textos = [t for t in docentes.iter(qn("w:t")) if t.text]
-            textos[0].text = "Docentes:"
-            textos[1].text = " Alberto Cortez y Ariel Enferrel"
-            p.addnext(docentes)
+            anterior = p
+            for etiqueta, valor in (("Directores de tesis:", " Alberto Cortez y Ariel Enferrel"),
+                                    ("Título al que se aspira:", " Técnico Universitario en Programación")):
+                linea = copy.deepcopy(p)
+                textos = [t for t in linea.iter(qn("w:t")) if t.text]
+                textos[0].text = etiqueta
+                textos[1].text = valor
+                anterior.addnext(linea)
+                anterior = linea
             break
 
 
@@ -661,20 +666,21 @@ def agregar_pie_con_numero(doc):
     fld("end")
 
 
-def volcar_resumen(armador, ruta):
-    """El Resumen va como en el avance: título centrado (sin estilo de capítulo) y texto con sangría."""
+def volcar_resumen(armador, ruta, titulo="Resumen"):
+    """El Resumen va como en el avance: título centrado (sin estilo de capítulo) y texto con sangría.
+    El Abstract en inglés usa el mismo formato."""
     doc = armador.doc
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _salto_de_pagina_antes(p)
     _set_spacing(p, 0, 240)
-    run = p.add_run("Resumen")
+    run = p.add_run(titulo)
     _fuente(run, tamano=14, negrita=True)
     for tipo, contenido in leer_bloques(ruta):
         if tipo == "titulo":
             continue
         if tipo != "parrafo":
-            raise ValueError(f"El Resumen solo admite párrafos; apareció {tipo}")
+            raise ValueError(f"{titulo} solo admite párrafos; apareció {tipo}")
         p = armador.parrafo(contenido)
         p.paragraph_format.left_indent = Pt(30)
         p.paragraph_format.right_indent = Pt(30)
@@ -721,6 +727,7 @@ def main():
 
     for c in resumen:
         volcar_resumen(armador, os.path.join(AQUI, c))
+    volcar_resumen(armador, os.path.join(AQUI, "abstract.md"), "Abstract")
 
     # El índice tiene que ir antes de los capítulos, pero necesita sus títulos: se arma al final
     # en un documento aparte y se mueve. Más simple: se recorren los capítulos dos veces.
