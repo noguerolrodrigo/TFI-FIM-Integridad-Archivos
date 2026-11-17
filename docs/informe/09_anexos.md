@@ -744,19 +744,20 @@ Todas las mediciones, salvo la muestra con Telegram real, usan la base de datos 
 `fim_pruebas` y un n8n descartable con Telegram simulado, sin tocar la instalación real.
 
 ```bash
-./scripts/preparar_bd_pruebas.sh                        # fim_pruebas vacía, con el esquema de fim_db
-./scripts/n8n_de_pruebas.sh iniciar                     # n8n de pruebas (puerto 5690)
+./scripts/preparar_bd_pruebas.sh       # fim_pruebas vacía, con el esquema de fim_db
+./scripts/n8n_de_pruebas.sh iniciar    # n8n de pruebas (puerto 5690)
 
-python scripts/medir_metricas.py --repeticiones 50      # MTTD, MTTR, alerta y ejecución
-python scripts/medir_falsos_positivos.py --ediciones 20 # vim y nano, con y sin filtro
-python scripts/medir_escaneo_periodico.py               # escaneo completo y cron de 10 s
+python scripts/medir_metricas.py --repeticiones 50       # MTTD, MTTR, alerta y ejecución
+python scripts/medir_falsos_positivos.py --ediciones 20  # vim y nano, con y sin filtro
+python scripts/medir_escaneo_periodico.py                # escaneo completo y cron de 10 s
 
 ./scripts/n8n_de_pruebas.sh detener
 
 # Muestra con el bot real (con la instalación real en marcha; solo lee fim_db)
 python scripts/medir_metricas.py --telegram-real --repeticiones 10
 
-# Resumen (media, mediana, p95, mínimo y máximo) y gráfico de las métricas; README de resultados
+# Resumen (media, mediana, p95, mínimo y máximo) y gráfico de las métricas;
+# README de resultados
 python scripts/resumir_metricas.py resultados/metricas_<fecha>.csv
 python scripts/armar_readme_resultados.py
 

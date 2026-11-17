@@ -220,6 +220,26 @@ def escribir_inline(p, texto, tamano=12, negrita_base=False, cursiva_base=False,
         _fuente(run, tamano=tamano, negrita=negrita_base or None, cursiva=cursiva_base or None)
 
 
+# ---------------------------------------------------------------- ancho de las columnas
+
+MARGEN_CELDA_PT = 14   # márgenes izquierdo y derecho de una celda, con un poco de aire
+
+
+def _palabras(texto):
+    """Devuelve [(palabra, es_codigo)]: los tramos de una celda que no se pueden partir."""
+    palabras = []
+    for m in re.finditer(r"`([^`]+)`|([^`]+)", texto):
+        tramo, es_codigo = (m.group(1), True) if m.group(1) is not None else (m.group(2), False)
+        palabras += [(p, es_codigo) for p in re.sub(r"[*\[\]]", "", tramo).split()]
+    return palabras
+
+
+def _ancho_palabra_pt(palabra, es_codigo, tamano):
+    """Ancho aproximado en puntos: la fuente monoespaciada ocupa 0,6 de su tamaño por carácter;
+    para Arial se toma 0,56, algo por encima de su promedio."""
+    return len(palabra) * (0.6 * (tamano - 1) if es_codigo else 0.56 * tamano)
+
+
 # ---------------------------------------------------------------- líneas de código largas
 
 LARGO_MAXIMO_CODIGO = 90
@@ -463,6 +483,11 @@ class Armador:
         else:
             tamano = 10
 
+        # Un nombre de archivo o un comando largo no tiene que partirse en cualquier letra: si la
+        # tabla tiene alguno de más de 40 caracteres, se achica la fuente
+        if tamano > 8 and any(len(palabra) > 40 for f in filas for c in f for palabra, _ in _palabras(c)):
+            tamano = 8
+
         tabla = self.doc.add_table(rows=len(filas), cols=columnas)
         tabla.alignment = 1  # centrada
         tabla.autofit = False
@@ -479,10 +504,19 @@ class Armador:
             bordes.append(b)
         _insertar_ordenado(tblpr, bordes, ORDEN_TBLPR)
 
-        # Ancho total = ancho útil; cada columna proporcional al largo de su contenido, con un piso
-        anchos_contenido = [max(16, min(50, max(len(f[c]) for f in filas))) for c in range(columnas)]
-        total = sum(anchos_contenido)
-        anchos = [int(ANCHO_UTIL_TWIPS * a / total) for a in anchos_contenido]
+        # Ancho total = ancho útil. Cada columna recibe primero lo que necesita su palabra más larga
+        # (para que no se parta) y el resto se reparte en proporción al largo del contenido.
+        util_pt = ANCHO_UTIL_TWIPS / 20
+        minimos = [min(max(_ancho_palabra_pt(palabra, es_codigo, tamano)
+                           for f in filas for palabra, es_codigo in _palabras(f[c]) or [("", False)])
+                       + MARGEN_CELDA_PT, util_pt * 0.5)
+                   for c in range(columnas)]
+        no_entra = sum(minimos) > util_pt
+        if no_entra:
+            minimos = [m * util_pt / sum(minimos) for m in minimos]
+        pesos = [max(16, min(50, max(len(f[c]) for f in filas))) for c in range(columnas)]
+        sobrante = util_pt - sum(minimos)
+        anchos = [int((minimos[c] + sobrante * pesos[c] / sum(pesos)) * 20) for c in range(columnas)]
         tblw = tblpr.find(qn("w:tblW"))
         if tblw is None:
             tblw = OxmlElement("w:tblW")
@@ -512,9 +546,11 @@ class Armador:
                 # Una tabla corta no se parte entre páginas; una larga sí (repite el encabezado)
                 if len(filas) <= 6 and r < len(filas) - 1:
                     _mantener_con_siguiente(p)
-                # Un nombre de archivo largo en código solo puede cortarse después de "_" (espacio de
-                # ancho cero), para que no quede partido en cualquier letra
-                contenido = re.sub(r"`[^`]+`", lambda m: m.group(0).replace("_", "_\u200b"), contenido)
+                # Solo si las palabras largas no entran en sus columnas: un nombre de archivo en
+                # código puede cortarse después de "_" (espacio de ancho cero), para que al menos no
+                # quede partido en cualquier letra
+                if no_entra:
+                    contenido = re.sub(r"`[^`]+`", lambda m: m.group(0).replace("_", "_\u200b"), contenido)
                 escribir_inline(p, contenido, tamano, negrita_base=(r == 0), tamano_codigo=tamano - 1)
         # Aire después de la tabla
         p = self.doc.add_paragraph()
