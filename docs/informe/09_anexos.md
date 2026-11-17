@@ -55,7 +55,7 @@ corresponden a ella.
 | `config.py` | Lee la configuración del archivo `.env` (Anexo C). |
 | `generar_baseline.py` | Genera la línea base y la copia de cada archivo a la bóveda; actualiza la línea base de un único archivo. |
 | `monitor_fim.py` | Monitor por eventos: verificación, evidencia, respuesta, escaneo inicial y ejecución de decisiones. |
-| `restaurar.py` | Restauración aprobada por una persona en el modo de aprobación. |
+| `restaurar.py` | Restauración manual desde la terminal, pensada para el modo de aprobación. No pasa por n8n ni registra una fila en `decisiones` (sección 4.7). |
 | `boveda.py` | Copia confiable de los archivos y restauración atómica, con temporal de nombre aleatorio. |
 | `bd.py` | Conexión a PostgreSQL, con reconexión. |
 | `hashes.py`, `metadatos.py`, `filtros.py` | Cálculo de SHA-256, lectura de permisos y propietario (sin seguir enlaces), y archivos ignorados: patrones de temporales de editores y temporales propios de la restauración. |
@@ -100,7 +100,8 @@ DIR_LOGS=./logs
 # Temporales de editores que no se vigilan, separados por ","
 PATRONES_IGNORADOS=*.swp,*.swo,*.swx,*~,*.tmp
 
-# automatica: el monitor restaura solo. aprobacion: espera a que alguien ejecute restaurar.py
+# automatica: el monitor restaura solo. aprobacion: registra, guarda la evidencia y espera la
+# decisión de una persona (botones de Telegram o enlace local de la alerta; sin n8n, restaurar.py)
 MODO_RESTAURACION=automatica
 
 # Aviso a n8n después de cada evento (vacío = no se avisa). El secreto viaja en el header X-FIM-Secreto.

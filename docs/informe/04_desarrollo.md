@@ -98,7 +98,7 @@ El código del motor está repartido en módulos con una responsabilidad cada un
 (configuración desde el archivo `.env`), `bd.py` (conexión a la base de datos), `boveda.py` (copia y
 restauración), `hashes.py` (SHA-256), `metadatos.py` (propietario y permisos), `filtros.py`
 (archivos ignorados), `pendientes.py` (registro local cuando la base de datos no responde),
-`notificador.py` (aviso a n8n) y `restaurar.py` (restauración manual).
+`notificador.py` (aviso a n8n) y `restaurar.py` (restauración manual desde la terminal, sección 4.7).
 
 ## 4.3 Línea base y bóveda
 
@@ -402,8 +402,11 @@ cambio, ejecuta la decisión y la registra en la tabla `ejecuciones`.
 
 ## 4.7 Canales de decisión y su seguridad
 
-Se implementaron dos canales para decidir, que comparten la misma base de datos: como solo se acepta
-una decisión por evento, el que se use primero es el que vale.
+Hay tres caminos para decidir qué hacer con un cambio. Dos son canales de la alerta, el enlace local
+y los botones de Telegram, y pasan por n8n, que registra la decisión en la tabla `decisiones`. Como
+esa tabla admite una sola fila por evento (sección 4.5), de esos dos canales vale el que se use
+primero: la base de datos rechaza la segunda decisión. El tercero es un comando local,
+`restaurar.py`, que no pasa por n8n.
 
 **Enlace local.** La alerta incluye, para cada opción, una dirección web hacia un nodo de espera de
 n8n en el propio equipo (`localhost`). n8n firma esas direcciones, que valen 24 horas, por lo que no
@@ -422,6 +425,19 @@ ngrok en su plan gratuito. Se tomaron las siguientes medidas:
 - El toque debe venir de la cuenta de Telegram autorizada. Los toques de otras cuentas se ignoran
   sin respuesta y quedan registrados en la tabla `accesos_rechazados`.
 - El editor de n8n exige una cuenta de usuario.
+
+**Comando local (`restaurar.py`).** Quien tiene acceso a una terminal del equipo puede ejecutar
+`python restaurar.py <ruta>`. El comando usa la misma función que el monitor, con las mismas
+verificaciones (línea base, hash de la bóveda y carpeta real), restaura el archivo desde la bóveda y
+deja en la fila `RESTAURADO` el usuario del sistema que lo ejecutó. Está pensado para el modo de
+aprobación, cuando n8n o Telegram no están disponibles; solo restaura, no permite aceptar un cambio.
+A diferencia de los otros dos caminos, no registra una fila en `decisiones` ni avisa a n8n, de modo
+que no ocupa la decisión del evento: la alerta sigue abierta hasta que alguien responde por uno de
+los canales. Si después se elige "Restaurar", el monitor encuentra el archivo ya igual a la línea
+base y lo informa como ejecutado sin hacer nada; si se elige "Aceptar cambio", se reaplica la versión
+guardada en cuarentena y pasa a la línea base. La regla de una decisión por evento vale, entonces,
+para las decisiones registradas por n8n; la restauración manual queda asentada en el registro de
+eventos, no en el de decisiones.
 
 Antes de implementar este canal se verificó, con un servidor descartable, que la cuenta gratuita de
 ngrok mantiene el mismo dominio entre reinicios y permite bloquear por ruta. En esa verificación se
