@@ -12,9 +12,11 @@ de un sistema comprometido.
 
 ## 1.2 Planteamiento del problema
 
-A pesar de la disponibilidad de soluciones de seguridad, muchas organizaciones pequeñas y medianas no
-cuentan con procesos sistemáticos que les permitan advertir a tiempo una modificación no autorizada
-de sus archivos. El monitoreo de integridad de archivos (File Integrity Monitoring, FIM) se ha
+Este trabajo parte del caso de una organización pequeña o mediana que administra unos pocos
+servidores Linux y que, aun con soluciones de seguridad disponibles, no cuenta con un proceso
+sistemático para advertir a tiempo una modificación no autorizada de sus archivos. No se relevó
+cuántas organizaciones están en esa situación: es el escenario para el que se diseñó el sistema, no
+una afirmación sobre el conjunto de las PyMEs. El monitoreo de integridad de archivos (File Integrity Monitoring, FIM) se ha
 abordado tradicionalmente con herramientas como Tripwire (Kim y Spafford, 1994) o AIDE (AIDE,
 s.f.), que comparan el estado del sistema de archivos con una base de referencia cada vez que se
 ejecuta la verificación, por lo general de forma programada. Este enfoque deja una ventana de exposición entre una verificación y la siguiente:
@@ -25,8 +27,8 @@ de FIM que, además de los escaneos programados (cada 12 horas en su configuraci
 permite el monitoreo en tiempo real de directorios en Linux y Windows y, con la opción
 `report_changes`, informa el contenido exacto que cambió en un archivo de texto (Wazuh Inc., s.f.-c).
 Sin embargo, se trata de una plataforma de propósito general, cuya adopción supone desplegar y
-mantener un conjunto de componentes que excede las necesidades y los recursos de muchas
-organizaciones pequeñas.
+mantener un conjunto de componentes (agentes y servidor) que puede exceder las necesidades y los
+recursos de una organización de ese tamaño.
 
 Además de detectar, interesa responder. Cuando se detecta un cambio, la restauración automática del
 archivo reduce el tiempo de exposición, pero también puede revertir un cambio legítimo de un
