@@ -25,24 +25,9 @@ identificador máximo de su tabla `registros_archivos` fue 44 antes y después. 
 alertas enviadas con el bot de Telegram real (sección 5.3), que sí quedó registrada en la base
 productiva.
 
-Las métricas se definieron de la siguiente manera, tomando como instante inicial `t0` el momento en
-que el script de medición terminó de escribir el archivo:
-
-- **MTTD (tiempo hasta la detección):** desde `t0` hasta la fila de detección en la base de datos.
-  El valor registrado es el inicio de la transacción de inserción, por lo que incluye la notificación
-  del kernel (inotify), el procesamiento de watchdog, el cálculo del hash y la consulta a la línea
-  base.
-- **MTTR (tiempo hasta la restauración):** desde `t0` hasta que el archivo vuelve a estar en disco
-  como en la línea base. En el caso de un archivo nuevo, se mide el aislamiento: el instante en que el
-  archivo deja de estar en el directorio vigilado porque fue movido a cuarentena.
-- **Latencia de alerta:** desde la fila de detección hasta la fila en la tabla `notificaciones`, que
-  n8n escribe después de que Telegram aceptó el mensaje.
-- **Latencia de ejecución:** desde que una decisión se registra en la tabla `decisiones` hasta que el
-  monitor la ejecuta y la registra en `ejecuciones`. No incluye el tiempo que tarda la persona en
-  decidir.
-
-Todas las marcas de tiempo provienen del mismo reloj, porque la base de datos y los scripts se
-ejecutaron en el mismo equipo.
+Las métricas que se informan (tiempo hasta la detección o MTTD, tiempo hasta la restauración o MTTR,
+latencia de alerta, latencia de ejecución y duración del COMMIT) y el instante inicial `t0` se
+definen en la sección 3.3 y no se repiten aquí.
 
 ## 5.2 Detección y restauración automática
 

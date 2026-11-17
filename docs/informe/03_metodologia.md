@@ -48,10 +48,11 @@ en que el script de medición terminó de escribir el archivo (después de cerra
 
 - **Tiempo hasta la detección (MTTD):** desde `t0` hasta la fila de detección en la base de datos. Se
   toma la marca de tiempo que asigna PostgreSQL al registrar la fila, que corresponde al inicio de la
-  transacción de inserción.
+  transacción de inserción. Incluye, por lo tanto, la notificación del kernel (inotify), el
+  procesamiento de watchdog, el cálculo del hash y la consulta a la línea base.
 - **Tiempo hasta la restauración (MTTR):** desde `t0` hasta que el archivo vuelve a estar en disco
   como en la línea base. Para un archivo nuevo se mide el aislamiento: el instante en que el archivo
-  ya no está en el directorio vigilado. Como control se registró también el tiempo hasta la fila
+  ya no está en el directorio vigilado, porque fue movido a cuarentena. Como control se registró también el tiempo hasta la fila
   `RESTAURADO` en la base de datos.
 - **Latencia de alerta:** desde la fila de detección hasta la fila en la tabla `notificaciones`, que
   n8n escribe después de que Telegram aceptó el mensaje.
