@@ -105,7 +105,8 @@ def test_directorio_borrado_restaura_los_archivos_de_la_baseline(entorno_monitor
 
 
 def test_la_restauracion_no_dispara_eventos_falsos(entorno_monitor):
-    # Al restaurar, watchdog avisa del temporal y del renombrado: no tienen que generar registros
+    # Al restaurar, watchdog avisa del temporal y del renombrado. Esos avisos se procesan cuando la
+    # restauración ya terminó: el temporal no está más en disco y no tienen que generar registros
     ruta = entorno_monitor.crear_en_baseline("config.txt", b"estado cero\n")
     temporal = entorno_monitor.ruta(boveda.PREFIJO_TEMPORAL + "config.txt")
 
