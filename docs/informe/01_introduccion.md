@@ -49,8 +49,9 @@ una licencia *fair-code*), y de **medir** su desempeño en lugar de suponerlo.
 
 Desde la perspectiva forense, el sistema guarda, junto con cada alerta, la evidencia del cambio: los
 hashes anterior y nuevo, una copia del archivo alterado y, en los archivos de texto, las líneas
-exactas que se agregaron o quitaron. Esto reduce el tiempo de análisis, porque quien recibe la alerta
-ve qué cambió sin tener que investigarlo a mano.
+exactas que se agregaron o quitaron. Se espera que esto reduzca el tiempo de análisis, porque quien
+recibe la alerta ve qué cambió sin tener que investigarlo a mano. Ese efecto es una expectativa de
+diseño: el tiempo de análisis de una persona no se midió en este trabajo.
 
 El trabajo responde, además, a la consigna de la cátedra para el proyecto de integridad de archivos
 (Cortez y Enferrel, 2026), cuyos ejes son la detección de cambios no autorizados, las alertas y la respuesta
