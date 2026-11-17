@@ -1,12 +1,18 @@
 import os
 import shutil
+import stat
+import tempfile
 import config
 
 # La carpeta de la bóveda sale de la configuración (DIR_BOVEDA). Las funciones aceptan
 # otra carpeta por parámetro, que es lo que usan los tests.
 
-# Prefijo de los temporales que crea la restauración (el monitor los ignora)
+# Prefijo de los temporales que crea la restauración. El resto del nombre es aleatorio, y el
+# prefijo solo sirve para reconocerlos a simple vista: el monitor no ignora nada por llevarlo.
 PREFIJO_TEMPORAL = ".fim_tmp_"
+
+# Rutas de los temporales que este proceso tiene creados en este momento
+temporales_propios = set()
 
 def ruta_en_boveda(ruta, boveda=None):
     """Devuelve dónde va el respaldo de un archivo: su ruta absoluta espejada dentro de la bóveda."""
@@ -34,9 +40,29 @@ def reponer_desde(origen, ruta):
 
     # Se copia a un temporal en la misma carpeta y se renombra encima del original:
     # el renombrado es atómico, así que el archivo nunca falta ni queda a medio escribir.
-    temporal = os.path.join(carpeta, PREFIJO_TEMPORAL + nombre)
-    shutil.copy2(origen, temporal)
-    os.replace(temporal, ruta)
+    with open(origen, "rb") as fuente:
+        # mkstemp elige un nombre aleatorio y crea el archivo con O_CREAT | O_EXCL | O_NOFOLLOW:
+        # si en ese nombre ya hay algo (por ejemplo un enlace simbólico puesto por un atacante),
+        # falla y prueba con otro en vez de escribir a través del enlace.
+        descriptor, temporal = tempfile.mkstemp(prefix=PREFIJO_TEMPORAL, dir=carpeta)
+        temporales_propios.add(temporal)
+        try:
+            # Todo se hace sobre el descriptor ya abierto, no sobre el nombre: aunque alguien
+            # cambie lo que hay en ese nombre, se sigue escribiendo en el archivo que se creó.
+            with os.fdopen(descriptor, "wb") as destino:
+                shutil.copyfileobj(fuente, destino)
+                destino.flush()
+                datos = os.fstat(fuente.fileno())
+                os.fchmod(destino.fileno(), stat.S_IMODE(datos.st_mode))
+                os.utime(destino.fileno(), ns=(datos.st_atime_ns, datos.st_mtime_ns))
+            # os.replace renombra el nombre, sin seguir enlaces: si ruta es un enlace, lo reemplaza
+            os.replace(temporal, ruta)
+        except BaseException:
+            if os.path.lexists(temporal):
+                os.unlink(temporal)
+            raise
+        finally:
+            temporales_propios.discard(temporal)
 
 def quitar(ruta, boveda=None):
     """Borra el respaldo de un archivo que salió de la baseline (si lo había)."""
