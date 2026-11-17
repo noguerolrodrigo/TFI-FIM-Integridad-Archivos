@@ -1,16 +1,22 @@
-"""Arma resultados/README.md a partir de los CSV y resúmenes más recientes de resultados/.
+"""Arma las secciones 1 a 5 de resultados/README.md a partir de los CSV y resúmenes de resultados/.
 
 Uso: python scripts/armar_readme_resultados.py   (desde la raíz del proyecto)
 
 Los números salen de los archivos; el texto de lectura es fijo y menciona los valores atípicos
 observados en la corrida del 15/10/2026.
+
+Las secciones 1 a 5 describen siempre las corridas del 15 y 16/10/2026 (commit 81b1bc8, la versión
+que auditó el tribunal): por eso los archivos se eligen por esa fecha y no "el más reciente". Lo
+que el README tenga a partir de la sección 6 (corridas posteriores) está escrito a mano y se conserva.
 """
 import csv, glob, json, os, sys
 sys.path.insert(0, "scripts")
 from resumir_metricas import percentil
 
+CORRIDAS = ("_20261015_", "_20261016_")   # las corridas de octubre de 2026
+
 def ultimo(patron):
-    return sorted(glob.glob(f"resultados/{patron}"))[-1]
+    return sorted(f for f in glob.glob(f"resultados/{patron}") if any(c in f for c in CORRIDAS))[-1]
 
 def valores(archivo, caso=None, metrica=None):
     return [float(f["valor_ms"]) for f in csv.DictReader(open(archivo, encoding="utf-8"))
@@ -131,5 +137,10 @@ Las definiciones no son idénticas, así que no se calcula un porcentaje de mejo
 - La tasa de falsos positivos del FIM es la de dos editores en un caso controlado, no la de un
   servidor en producción.
 """
+# Se conserva lo que haya a partir de la sección 6
+MARCA = "\n## 6. "
+anterior = open("resultados/README.md", encoding="utf-8").read() if os.path.exists("resultados/README.md") else ""
+if MARCA in anterior:
+    texto += anterior[anterior.index(MARCA):]
 open("resultados/README.md", "w", encoding="utf-8").write(texto)
 print(texto)

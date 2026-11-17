@@ -155,8 +155,8 @@ que auditó el tribunal, y no se modificaron. Después de la devolución se corr
 entre procesos) y se volvió a medir con el mismo protocolo, la misma semilla (2026) y la misma
 máquina sobre el commit `39c661c`.
 
-**Atención:** `scripts/armar_readme_resultados.py` toma siempre los archivos más recientes. Si se
-vuelve a ejecutar, reescribe las secciones 1 a 5 con la última corrida y borra esta sección.
+`scripts/armar_readme_resultados.py` regenera solo las secciones 1 a 5, siempre con los archivos de
+octubre, y conserva esta sección, que está escrita a mano.
 
 Qué se repitió y qué no:
 
