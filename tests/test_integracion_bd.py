@@ -131,3 +131,39 @@ def test_la_bd_rechaza_una_segunda_decision_sobre_el_mismo_evento(bd_pruebas):
     with pytest.raises(psycopg2.errors.UniqueViolation):
         bd.ejecutar("INSERT INTO decisiones (evento_id, decision, decidido_por, canal) "
                     "VALUES (%s, 'AUTORIZADO', 'otro', 'telegram')", (evento_id,))
+
+
+def test_la_baseline_saltea_los_enlaces_simbolicos_y_avisa(bd_pruebas, tmp_path, capsys):
+    a = crear("a.conf", "a\n")
+    afuera = tmp_path / "afuera"
+    afuera.mkdir()
+    (afuera / "real.conf").write_text("archivo de afuera\n")
+    enlace_archivo = os.path.join(config.RUTAS_MONITOREADAS[0], "enlace.conf")
+    enlace_carpeta = os.path.join(config.RUTAS_MONITOREADAS[0], "enlace_carpeta")
+    os.symlink(afuera / "real.conf", enlace_archivo)
+    os.symlink(afuera, enlace_carpeta)
+
+    generar_baseline.generar_baseline()
+
+    assert set(vigente()) == {a}
+    assert not boveda.tiene_respaldo(enlace_archivo)
+    salida = capsys.readouterr().out
+    assert f"{enlace_archivo} -> {afuera / 'real.conf'}" in salida
+    assert f"{enlace_carpeta} -> {afuera}" in salida
+    assert "2 enlace(s) simbólico(s)" in salida
+
+
+def test_no_se_actualiza_la_baseline_de_una_ruta_que_es_un_enlace(bd_pruebas, tmp_path):
+    a = crear("a.conf", "a\n")
+    generar_baseline.generar_baseline()
+    otro = tmp_path / "otro.conf"
+    otro.write_text("otro\n")
+    os.remove(a)
+    os.symlink(otro, a)
+
+    with pytest.raises(ValueError):
+        generar_baseline.actualizar_archivo(a, "prueba")
+
+    assert vigente()[a][1] == 1   # sigue vigente la versión anterior
+    with open(boveda.ruta_en_boveda(a)) as f:
+        assert f.read() == "a\n"

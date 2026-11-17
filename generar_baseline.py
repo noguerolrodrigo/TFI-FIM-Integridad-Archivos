@@ -24,6 +24,7 @@ def generar_baseline():
         cursor = conn.cursor()
         archivos_procesados = 0
         rutas_vigentes = []
+        enlaces = []
 
         # Cada corrida es una versión nueva: la vigente es siempre la más alta
         cursor.execute("SELECT COALESCE(MAX(version_baseline), 0) + 1 FROM registros_archivos WHERE evento = 'BASELINE'")
@@ -36,8 +37,20 @@ def generar_baseline():
                 continue
 
             for root, dirs, files in os.walk(directorio):
+                # Los enlaces simbólicos no se siguen ni entran en la baseline. os.walk lista entre
+                # las carpetas los enlaces a directorios (sin entrar en ellos) y entre los archivos
+                # los demás.
+                for nombre in dirs + files:
+                    ruta_completa = os.path.join(root, nombre)
+                    if os.path.islink(ruta_completa):
+                        enlaces.append(ruta_completa)
+                        print(f"[!] Enlace simbólico, no entra en la baseline: "
+                              f"{ruta_completa} -> {os.readlink(ruta_completa)}")
+
                 for file in files:
                     ruta_completa = os.path.join(root, file)
+                    if os.path.islink(ruta_completa):
+                        continue
 
                     # Los temporales no entran en la baseline (el monitor tampoco los vigila)
                     if es_ignorado(ruta_completa):
@@ -73,6 +86,10 @@ def generar_baseline():
             print(f"[*] Bóveda: {borrados} respaldo(s) de archivos que ya no existen eliminado(s).")
 
         print(f"\n[*] Baseline versión {version} completada. {archivos_procesados} archivo(s) guardado(s).")
+        if enlaces:
+            print(f"[!] {len(enlaces)} enlace(s) simbólico(s) quedaron fuera de la baseline (listados arriba).")
+            print("    El monitor no admite enlaces en los directorios vigilados: los va a registrar como")
+            print("    CREADO y a eliminar (el enlace, no su destino). Si son legítimos, no vigiles ese directorio.")
 
     except Exception as e:
         print(f"[!] Error: {e}")
@@ -85,6 +102,8 @@ def actualizar_archivo(ruta, motivo):
     cambio pendiente en otro archivo. Devuelve el número de la versión nueva.
     """
     ruta = os.path.abspath(ruta)
+    if os.path.islink(ruta):
+        raise ValueError(f"{ruta} es un enlace simbólico: la baseline solo admite archivos comunes.")
     with bd.candado:
         conn = bd.conectar()
         try:
