@@ -227,6 +227,8 @@ Los scripts que las producen están en [`scripts/`](scripts/) (`medir_metricas.p
 
 - [`docs/informe/`](docs/informe/): capítulos del informe final en Markdown (`00_resumen.md` a
   `09_anexos.md`) y el documento armado, `TFI_Noguerol_2026.docx`, que se genera con
-  `docs/informe/armar_docx.py` (dependencias en `requirements-informe.txt`).
+  `docs/informe/armar_docx.py` (dependencias en `requirements-informe.txt`). Para una vista previa
+  en PDF con los índices actualizados: `/usr/bin/python3 docs/informe/exportar_pdf.py` (usa
+  LibreOffice y el Python del sistema).
 - [`docs/Informe de Avance.pdf`](docs/Informe%20de%20Avance.pdf): el informe de avance entregado.
 - Las limitaciones conocidas están en el capítulo 6 del informe (sección 6.4).
