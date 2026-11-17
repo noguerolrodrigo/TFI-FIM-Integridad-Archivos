@@ -75,10 +75,10 @@ def test_cambio_de_propietario_sin_ser_root_se_registra_pero_no_se_puede_reponer
     ruta = entorno_monitor.crear_en_baseline("config.txt", b"estado cero\n")
     entorno_monitor.baseline[ruta]["owner"] = "0"   # la baseline dice que el dueño era root
 
-    def chown_sin_permiso(ruta, uid, gid):
+    def fchown_sin_permiso(descriptor, uid, gid):
         raise PermissionError("Operation not permitted")
 
-    monkeypatch.setattr(os, "chown", chown_sin_permiso)
+    monkeypatch.setattr(os, "fchown", fchown_sin_permiso)
 
     entorno_monitor.evento_modificado(ruta)
 

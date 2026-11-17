@@ -330,3 +330,62 @@ def test_la_copia_a_cuarentena_conserva_permisos_y_fecha(entorno_monitor):
     copia = os.stat(entorno_monitor.eventos[0]["ruta_cuarentena"])
     assert copia.st_mode & 0o7777 == 0o750
     assert copia.st_mtime_ns == 1_700_000_000_000_000_000
+
+
+# --- Permisos y propietario sin seguir enlaces ---
+
+def modo(ruta):
+    return os.stat(ruta).st_mode & 0o7777
+
+
+def test_reponer_permisos_no_toca_el_destino_si_cambian_el_archivo_por_un_enlace(
+        entorno_monitor, tmp_path, monkeypatch):
+    ruta = entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n", modo=0o644)
+    victima = tmp_path / "victima.txt"
+    victima.write_text("archivo de afuera\n")
+    os.chmod(victima, 0o600)
+    os.chmod(ruta, 0o777)
+
+    # El cambio por un enlace ocurre después de verificar y antes de reponer los permisos
+    def registrar_y_cambiar(*args, **kwargs):
+        if args[3] == "PERMISOS":
+            os.remove(ruta)
+            os.symlink(victima, ruta)
+        return entorno_monitor.registrar(*args, **kwargs)
+
+    monkeypatch.setattr(monitor_fim, "log_to_db", registrar_y_cambiar)
+    entorno_monitor.evento_modificado(ruta)
+
+    assert modo(victima) == 0o600   # antes, chmod seguía el enlace y la dejaba en 644
+
+
+def test_aceptar_un_cambio_de_permisos_no_toca_el_destino_de_un_enlace(entorno_monitor, tmp_path, monkeypatch):
+    monkeypatch.setattr("config.MODO_RESTAURACION", "aprobacion")
+    ruta = entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n", modo=0o644)
+    os.chmod(ruta, 0o777)
+    entorno_monitor.evento_modificado(ruta)
+    assert entorno_monitor.tipos_de_evento() == ["PERMISOS"]
+
+    # Entre la alerta y el botón, el archivo se cambia por un enlace a otro
+    victima = tmp_path / "victima.txt"
+    victima.write_text("archivo de afuera\n")
+    os.chmod(victima, 0o600)
+    os.remove(ruta)
+    os.symlink(victima, ruta)
+    versiones = entorno_monitor.versiones
+
+    assert monitor_fim.ejecutar_decision(entorno_monitor.decision(1, monitor_fim.ACEPTAR)) == "RECHAZADA"
+    assert modo(victima) == 0o600
+    assert entorno_monitor.versiones == versiones   # no se generó una baseline nueva
+
+
+def test_aceptar_un_cambio_de_permisos_sigue_funcionando_con_un_archivo_comun(entorno_monitor, monkeypatch):
+    monkeypatch.setattr("config.MODO_RESTAURACION", "aprobacion")
+    ruta = entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n", modo=0o644)
+    os.chmod(ruta, 0o600)
+    entorno_monitor.evento_modificado(ruta)
+    os.chmod(ruta, 0o644)   # alguien lo volvió atrás a mano antes de la decisión
+
+    assert monitor_fim.ejecutar_decision(entorno_monitor.decision(1, monitor_fim.ACEPTAR)) == "EJECUTADA"
+    assert modo(ruta) == 0o600
+    assert entorno_monitor.baseline[ruta]["permisos"] == "600"

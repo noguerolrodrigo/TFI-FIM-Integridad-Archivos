@@ -307,7 +307,7 @@ def guardar_sin_verificar(nombre, ruta, hash_actual, error, destino_enlace=None,
     })
     print(f"[+] Evidencia en {ruta_cuarentena} y evento guardado en {config.ARCHIVO_PENDIENTES}")
 
-def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por=None):
+def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por=None, descriptor=None):
     """El contenido está intacto pero cambiaron los permisos o el dueño: se registra y se reponen.
 
     Devuelve (resultado, id del evento registrado).
@@ -333,10 +333,12 @@ def responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_po
     print("[*] Iniciando protocolo de Respuesta Automatizada...")
     resultado = NO_RESTAURADO
     try:
-        os.chmod(ruta, int(baseline["permisos"], 8))
+        # fchmod y fchown actúan sobre el archivo ya abierto, no sobre el nombre: chmod y chown
+        # seguirían un enlace simbólico si alguien cambiara el archivo por uno en este momento
+        os.fchmod(descriptor, int(baseline["permisos"], 8))
         if owner != baseline["owner"]:
             # Cambiar el dueño de un archivo solo lo puede hacer root
-            os.chown(ruta, int(baseline["owner"]), -1)
+            os.fchown(descriptor, int(baseline["owner"]), -1)
         log_to_db(nombre, ruta, h, RESTAURADO,
                   "Permisos y propietario repuestos según la baseline" + firma_de_aprobacion(aprobado_por),
                   hash_anterior=h)
@@ -476,7 +478,7 @@ def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, 
         avisados[ruta] = (estado, h, owner, permisos)
 
     if estado == PERMISOS:
-        return responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por)
+        return responder_a_permisos(nombre, ruta, h, owner, permisos, baseline, aprobado_por, descriptor)
 
     if estado == CREADO and aprobado_por is not None:
         print(f"[-] {ruta} no está en la baseline: no hay nada que restaurar.")
@@ -619,10 +621,18 @@ def aceptar_cambio(d):
         if os.path.lexists(ruta):
             os.remove(ruta)
     elif d["evento"] == PERMISOS:
-        os.chmod(ruta, int(d["permisos"], 8))
-        if leer_owner_y_permisos(ruta)[0] != d["owner"]:
-            # Cambiar el dueño de un archivo solo lo puede hacer root
-            os.chown(ruta, int(d["owner"]), -1)
+        # Entre la alerta y la decisión pudo pasar mucho tiempo: se comprueba que en la ruta siga
+        # habiendo un archivo común y los permisos se aplican sobre el descriptor, sin seguir enlaces
+        descriptor, _ = abrir_archivo(ruta)
+        if descriptor is None:
+            return "RECHAZADA", "En la ruta ya no hay un archivo común (falta o es un enlace simbólico): no se acepta."
+        try:
+            os.fchmod(descriptor, int(d["permisos"], 8))
+            if str(os.fstat(descriptor).st_uid) != d["owner"]:
+                # Cambiar el dueño de un archivo solo lo puede hacer root
+                os.fchown(descriptor, int(d["owner"]), -1)
+        finally:
+            os.close(descriptor)
 
     motivo = (f"Cambio aceptado por {d['decidido_por']} ({d['canal']}), "
               f"decisión #{d['id']} sobre el evento #{d['evento_id']}.")
