@@ -243,3 +243,90 @@ def test_no_se_acepta_un_cambio_si_la_carpeta_paso_a_ser_un_enlace(entorno_monit
 
     assert monitor_fim.ejecutar_decision(entorno_monitor.decision(1, monitor_fim.ACEPTAR)) == "RECHAZADA"
     assert os.listdir(afuera) == []
+
+
+# --- Hash, diff y copia a cuarentena desde una sola apertura (TOCTOU) ---
+
+def test_la_copia_a_cuarentena_es_del_archivo_que_se_verifico_aunque_despues_lo_cambien_por_un_enlace(
+        entorno_monitor, tmp_path, monkeypatch):
+    ruta = entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n")
+    secreto = tmp_path / "secreto.txt"
+    secreto.write_text("clave: 1234\n")
+    with open(ruta, "a") as f:
+        f.write("linea del atacante\n")
+
+    # El cambio por un enlace ocurre después del hash y antes de la copia a cuarentena
+    def registrar_y_cambiar(*args, **kwargs):
+        if args[3] == "MODIFICADO":
+            os.remove(ruta)
+            os.symlink(secreto, ruta)
+        return entorno_monitor.registrar(*args, **kwargs)
+
+    monkeypatch.setattr(monitor_fim, "log_to_db", registrar_y_cambiar)
+    entorno_monitor.evento_modificado(ruta)
+
+    registro = entorno_monitor.eventos[0]
+    with open(registro["ruta_cuarentena"]) as f:
+        assert f.read() == "estado cero\nlinea del atacante\n"
+    assert get_sha256(registro["ruta_cuarentena"]) == registro["hash_sha256"]
+    assert not os.path.islink(ruta)
+    assert get_sha256(ruta) == entorno_monitor.hash_baseline(ruta)
+
+
+def test_el_diff_es_del_archivo_que_se_verifico_aunque_despues_lo_cambien_por_un_enlace(
+        entorno_monitor, tmp_path, monkeypatch):
+    ruta = entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n")
+    secreto = tmp_path / "secreto.txt"
+    secreto.write_text("clave: 1234\n")
+    with open(ruta, "a") as f:
+        f.write("linea del atacante\n")
+
+    # El cambio por un enlace ocurre después del hash y antes de armar el diff
+    verificar_real = monitor_fim.verificar
+
+    def verificar_y_cambiar(*args, **kwargs):
+        resultado = verificar_real(*args, **kwargs)
+        os.remove(ruta)
+        os.symlink(secreto, ruta)
+        return resultado
+
+    monkeypatch.setattr(monitor_fim, "verificar", verificar_y_cambiar)
+    entorno_monitor.evento_modificado(ruta)
+
+    diff = entorno_monitor.eventos[0]["detalles_diff"]
+    assert "+linea del atacante" in diff
+    assert "1234" not in diff
+
+
+def test_si_el_archivo_sigue_cambiando_queda_anotado_que_la_copia_no_coincide_con_el_hash(
+        entorno_monitor, monkeypatch):
+    ruta = entorno_monitor.crear_en_baseline("app.conf", b"estado cero\n")
+    with open(ruta, "a") as f:
+        f.write("primera parte\n")
+
+    def registrar_y_seguir_escribiendo(*args, **kwargs):
+        if args[3] == "MODIFICADO":
+            with open(ruta, "a") as f:
+                f.write("segunda parte\n")
+        return entorno_monitor.registrar(*args, **kwargs)
+
+    monkeypatch.setattr(monitor_fim, "log_to_db", registrar_y_seguir_escribiendo)
+    entorno_monitor.evento_modificado(ruta)
+
+    detectado, restaurado = entorno_monitor.eventos
+    hash_copia = get_sha256(detectado["ruta_cuarentena"])
+    assert hash_copia != detectado["hash_sha256"]
+    assert hash_copia in restaurado["detalles_diff"]
+
+
+def test_la_copia_a_cuarentena_conserva_permisos_y_fecha(entorno_monitor):
+    ruta = entorno_monitor.crear_en_baseline("script.sh", b"#!/bin/sh\n", modo=0o750)
+    with open(ruta, "a") as f:
+        f.write("echo cambio\n")
+    os.utime(ruta, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
+
+    entorno_monitor.evento_modificado(ruta)
+
+    copia = os.stat(entorno_monitor.eventos[0]["ruta_cuarentena"])
+    assert copia.st_mode & 0o7777 == 0o750
+    assert copia.st_mtime_ns == 1_700_000_000_000_000_000

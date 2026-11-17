@@ -1,7 +1,9 @@
 import time
 import contextlib
 import difflib
+import errno
 import fcntl
+import hashlib
 import os
 import stat
 import sys
@@ -17,7 +19,7 @@ import generar_baseline
 import notificador
 import pendientes
 from filtros import es_ignorado
-from hashes import get_sha256
+from hashes import get_sha256, sha256_de_descriptor
 from metadatos import leer_owner_y_permisos
 
 # Resultados posibles de comparar un archivo con la baseline.
@@ -85,10 +87,16 @@ INTERVALO_DECISIONES = 2
 # Decisiones ya ejecutadas por este proceso, por si no se pudo registrar la ejecución en la BD
 decisiones_ejecutadas = set()
 
-def leer_archivo_texto(ruta):
-    """Lee las líneas de un archivo de texto. Devuelve None si es binario o no se puede leer."""
+def leer_archivo_texto(origen):
+    """Lee las líneas de un archivo de texto. Devuelve None si es binario o no se puede leer.
+
+    origen es una ruta o el descriptor de un archivo ya abierto (que se lee desde el principio).
+    """
     try:
-        with open(ruta, 'rb') as f:
+        if isinstance(origen, int):
+            os.lseek(origen, 0, os.SEEK_SET)
+        # closefd=False: si es un descriptor, lo cierra quien lo abrió
+        with open(origen, 'rb', closefd=not isinstance(origen, int)) as f:
             contenido = f.read()
         if b'\x00' in contenido:
             return None
@@ -97,7 +105,10 @@ def leer_archivo_texto(ruta):
         return None
 
 def calcular_diff(ruta_antes, ruta_ahora):
-    """Compara la copia de la bóveda con el archivo actual y devuelve la evidencia."""
+    """Compara la copia de la bóveda con el archivo actual y devuelve la evidencia.
+
+    El archivo actual puede venir como ruta o como descriptor ya abierto.
+    """
     lineas_viejas = leer_archivo_texto(ruta_antes)
     lineas_nuevas = leer_archivo_texto(ruta_ahora)
     if lineas_viejas is None or lineas_nuevas is None:
@@ -118,17 +129,55 @@ def rutas_de_la_baseline():
     filas = bd.ejecutar("SELECT ruta_completa FROM baseline_vigente ORDER BY ruta_completa")
     return [fila[0] for fila in filas]
 
-def destino_de_enlace(ruta):
-    """Devuelve a dónde apunta la ruta si es un enlace simbólico, o None si no lo es.
+def abrir_archivo(ruta):
+    """Abre el archivo una sola vez, sin seguir enlaces. Devuelve (descriptor, destino_enlace):
 
-    Usa lstat, que mira la ruta en sí: open() y stat() siguen el enlace y verían el archivo de destino.
+    - (descriptor, None): es un archivo común. El hash, el diff y la copia a cuarentena se sacan
+      todos de ese descriptor. Así se refieren al mismo archivo aunque después alguien cambie lo
+      que hay en ese nombre (por otro archivo o por un enlace). Lo cierra quien llama.
+    - (None, destino): es un enlace simbólico que apunta a destino. No se abre.
+    - (None, None): no está en disco, no se puede leer o no es un archivo común.
     """
     try:
-        if stat.S_ISLNK(os.lstat(ruta).st_mode):
-            return os.readlink(ruta)
-    except OSError:
-        pass
-    return None
+        # O_NOFOLLOW: si el último tramo de la ruta es un enlace, falla con ELOOP en vez de seguirlo.
+        # O_NONBLOCK: no se queda esperando si lo que hay es una tubería (FIFO).
+        descriptor = os.open(ruta, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as e:
+        if e.errno == errno.ELOOP:
+            try:
+                return None, os.readlink(ruta)
+            except OSError:
+                pass
+        return None, None
+    if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        return None, None
+    return descriptor, None
+
+def copiar_evidencia(descriptor, destino):
+    """Copia a la cuarentena el archivo ya abierto, en bloques, con sus permisos y fechas.
+
+    Devuelve el SHA-256 de lo que copió, para poder compararlo con el hash registrado.
+    """
+    sha256_hash = hashlib.sha256()
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    # "x": crea el archivo y falla si ya existía algo con ese nombre
+    with open(destino, "xb") as copia:
+        for bloque in iter(lambda: os.read(descriptor, 65536), b""):
+            sha256_hash.update(bloque)
+            copia.write(bloque)
+        copia.flush()
+        datos = os.fstat(descriptor)
+        os.fchmod(copia.fileno(), stat.S_IMODE(datos.st_mode))
+        os.utime(copia.fileno(), ns=(datos.st_atime_ns, datos.st_mtime_ns))
+    return sha256_hash.hexdigest()
+
+def nota_si_la_copia_difiere(hash_registrado, hash_copia):
+    """Texto para dejar constancia si el archivo siguió cambiando entre el hash y la copia."""
+    if hash_copia == hash_registrado:
+        return ""
+    return (" El archivo siguió cambiando después de la detección: la copia en cuarentena "
+            f"tiene el hash {hash_copia}.")
 
 def carpeta_real_fuera_de_la_raiz(ruta):
     """Si la carpeta del archivo, resolviendo enlaces, quedó fuera de su directorio vigilado,
@@ -226,7 +275,7 @@ def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=
         print(f"[*] Evento guardado en {config.ARCHIVO_PENDIENTES}")
         return None
 
-def guardar_sin_verificar(nombre, ruta, hash_actual, error, destino_enlace=None):
+def guardar_sin_verificar(nombre, ruta, hash_actual, error, destino_enlace=None, descriptor=None):
     """Sin acceso a la baseline no se sabe si el cambio es legítimo: se guarda la evidencia y no se restaura."""
     respaldo = boveda.ruta_en_boveda(ruta)
     hash_boveda = get_sha256(respaldo)
@@ -242,11 +291,12 @@ def guardar_sin_verificar(nombre, ruta, hash_actual, error, destino_enlace=None)
         texto_diff = "El archivo no está en disco."
     else:
         ruta_cuarentena = nueva_ruta_cuarentena(nombre)
-        shutil.copy2(ruta, ruta_cuarentena)
+        hash_copia = copiar_evidencia(descriptor, ruta_cuarentena)
         if hash_boveda is None:
             texto_diff = "Sin copia en la bóveda para comparar."
         else:
-            texto_diff = calcular_diff(respaldo, ruta)
+            texto_diff = calcular_diff(respaldo, descriptor)
+        texto_diff += nota_si_la_copia_difiere(hash_actual, hash_copia)
 
     owner, permisos = leer_owner_y_permisos(ruta)
     pendientes.guardar({
@@ -315,7 +365,7 @@ def avisar_pendiente(ruta):
     print("-" * 50)
 
 def registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a=None,
-                         destino_enlace=None):
+                         destino_enlace=None, descriptor=None):
     """Un cambio dentro de una ventana de mantenimiento: queda registrado con su evidencia, sin restaurar.
 
     Mientras el archivo siga igual, los eventos repetidos no generan otra fila.
@@ -331,13 +381,13 @@ def registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ven
         # De un enlace se registra a dónde apunta; el destino no se lee ni se copia
         detalle += f"\nEn la ruta hay un enlace simbólico → {destino_enlace}."
     elif estado == MODIFICADO and boveda.tiene_respaldo(ruta):
-        detalle += "\n" + calcular_diff(boveda.ruta_en_boveda(ruta), ruta)
+        detalle += "\n" + calcular_diff(boveda.ruta_en_boveda(ruta), descriptor)
 
     # La copia en cuarentena queda como registro de lo que se cambió (no se mueve el archivo)
     ruta_cuarentena = None
     if h is not None:
         ruta_cuarentena = nueva_ruta_cuarentena(nombre)
-        shutil.copy2(ruta, ruta_cuarentena)
+        detalle += nota_si_la_copia_difiere(h, copiar_evidencia(descriptor, ruta_cuarentena))
 
     evento_id = log_to_db(nombre, ruta, h, evento, detalle,
                           hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
@@ -373,14 +423,23 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     # de la baseline ya no está en su lugar: lo que haya del otro lado no se lee ni se toca
     carpeta_afuera = carpeta_real_fuera_de_la_raiz(ruta)
 
-    if carpeta_afuera is not None:
-        destino_enlace, h, owner, permisos = None, None, "N/A", "N/A"
-    else:
-        # Un enlace simbólico no se sigue: no se le calcula hash ni se lee o copia su destino
-        destino_enlace = destino_de_enlace(ruta)
+    # El archivo se abre una sola vez y sin seguir enlaces. Un enlace simbólico no se abre:
+    # no se le calcula hash ni se lee o copia su destino
+    descriptor, destino_enlace = (None, None) if carpeta_afuera is not None else abrir_archivo(ruta)
+    try:
+        return _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera,
+                                 movido_a, movido_desde, aprobado_por)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
+def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, movido_a, movido_desde, aprobado_por):
+    """Clasifica y responde con el archivo ya abierto (descriptor es None si no está o es un enlace)."""
+    if carpeta_afuera is not None:
+        h, owner, permisos = None, "N/A", "N/A"
+    else:
         # None si el archivo no está en disco (o si es un enlace)
-        h = get_sha256(ruta) if destino_enlace is None else None
+        h = sha256_de_descriptor(descriptor) if descriptor is not None else None
 
         if h is None and destino_enlace is None and os.path.lexists(ruta):
             if os.path.isfile(ruta):
@@ -395,7 +454,7 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     except Exception as e:
         print(f"[!] ALERTA: no se pudo consultar la baseline para verificar {nombre}: {e}")
         print("    Sin baseline no se restaura. Revisá que PostgreSQL esté levantado.")
-        guardar_sin_verificar(nombre, ruta, h, e, destino_enlace)
+        guardar_sin_verificar(nombre, ruta, h, e, destino_enlace, descriptor)
         return SIN_VERIFICAR, None
 
     if estado == SIN_CAMBIOS:
@@ -407,7 +466,7 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
         ventana_id = ventana_que_autoriza(ruta)
         if ventana_id is not None:
             return registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a,
-                                        destino_enlace)
+                                        destino_enlace, descriptor)
 
     # En modo aprobación el archivo queda alterado hasta que alguien aprueba:
     # el mismo cambio se registra una sola vez
@@ -447,7 +506,7 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     elif estado == ELIMINADO:
         texto_diff = "El archivo de la baseline fue eliminado."
     elif restaurable:
-        texto_diff = calcular_diff(respaldo, ruta)
+        texto_diff = calcular_diff(respaldo, descriptor)
     else:
         texto_diff = ""
     if carpeta_afuera is not None:
@@ -472,6 +531,7 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     print("[*] Iniciando protocolo de Respuesta Automatizada...")
 
     resultado = NO_RESTAURADO
+    nota_copia = ""
     try:
         if estado == CREADO and destino_enlace is not None:
             # Enlace que no está en la baseline: se quita el enlace (unlink no toca el destino).
@@ -489,9 +549,12 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
             resultado = CREADO
         else:
             if h is not None:
-                # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia)
-                shutil.copy2(ruta, ruta_cuarentena)
+                # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia), desde el mismo
+                # descriptor del que salió el hash
+                nota_copia = nota_si_la_copia_difiere(h, copiar_evidencia(descriptor, ruta_cuarentena))
                 print(f"[+] AISLAMIENTO EXITOSO: Evidencia copiada a {ruta_cuarentena}")
+                if nota_copia:
+                    print(f"[!]{nota_copia}")
 
             if not restaurable:
                 print("[-] NO SE RESTAURA: la bóveda no coincide con la baseline. Requiere revisión manual.")
@@ -506,7 +569,8 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
                 # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
                 boveda.restaurar(ruta)
                 log_to_db(nombre, ruta, get_sha256(ruta), RESTAURADO,
-                          f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por),
+                          f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por)
+                          + nota_copia,
                           hash_anterior=h, ruta_cuarentena=ruta_cuarentena)
                 print(f"[+] RESTAURACIÓN EXITOSA: El archivo original ha sido recuperado.")
                 resultado = RESTAURADO
