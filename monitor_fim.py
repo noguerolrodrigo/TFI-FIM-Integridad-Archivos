@@ -130,6 +130,21 @@ def destino_de_enlace(ruta):
         pass
     return None
 
+def carpeta_real_fuera_de_la_raiz(ruta):
+    """Si la carpeta del archivo, resolviendo enlaces, quedó fuera de su directorio vigilado,
+    devuelve dónde está en realidad. Si sigue adentro (lo normal), devuelve None.
+
+    Pasa cuando una carpeta del camino se reemplazó por un enlace simbólico: lstat y O_NOFOLLOW
+    solo miran el último tramo de la ruta, no las carpetas intermedias.
+    """
+    for directorio in config.RUTAS_MONITOREADAS:
+        if config.dentro_de(ruta, directorio):
+            carpeta_real = os.path.realpath(os.path.dirname(ruta))
+            if config.dentro_de(carpeta_real, os.path.realpath(directorio)):
+                return None
+            return carpeta_real
+    return None
+
 def verificar(ruta, hash_actual, owner=None, permisos=None, es_enlace=False):
     """Compara el estado actual del archivo (hash None si no está en disco) con la baseline vigente.
 
@@ -354,18 +369,25 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     if es_ignorado(ruta):
         return SIN_CAMBIOS, None
 
-    # Un enlace simbólico no se sigue: no se le calcula hash ni se lee o copia su destino
-    destino_enlace = destino_de_enlace(ruta)
+    # Si una carpeta del camino es un enlace que lleva afuera del directorio vigilado, el archivo
+    # de la baseline ya no está en su lugar: lo que haya del otro lado no se lee ni se toca
+    carpeta_afuera = carpeta_real_fuera_de_la_raiz(ruta)
 
-    # None si el archivo no está en disco (o si es un enlace)
-    h = get_sha256(ruta) if destino_enlace is None else None
+    if carpeta_afuera is not None:
+        destino_enlace, h, owner, permisos = None, None, "N/A", "N/A"
+    else:
+        # Un enlace simbólico no se sigue: no se le calcula hash ni se lee o copia su destino
+        destino_enlace = destino_de_enlace(ruta)
 
-    if h is None and destino_enlace is None and os.path.lexists(ruta):
-        if os.path.isfile(ruta):
-            print(f"[!] No se pudo leer {ruta}: no se puede verificar.")
-        return SIN_VERIFICAR, None
+        # None si el archivo no está en disco (o si es un enlace)
+        h = get_sha256(ruta) if destino_enlace is None else None
 
-    owner, permisos = leer_owner_y_permisos(ruta)
+        if h is None and destino_enlace is None and os.path.lexists(ruta):
+            if os.path.isfile(ruta):
+                print(f"[!] No se pudo leer {ruta}: no se puede verificar.")
+            return SIN_VERIFICAR, None
+
+        owner, permisos = leer_owner_y_permisos(ruta)
 
     # La verdad está en la baseline de la BD
     try:
@@ -428,6 +450,9 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
         texto_diff = calcular_diff(respaldo, ruta)
     else:
         texto_diff = ""
+    if carpeta_afuera is not None:
+        texto_diff += (f" Su carpeta pasa por un enlace simbólico y lleva a {carpeta_afuera}, fuera del "
+                       "directorio vigilado: no se lee ni se restaura ahí.")
     if estado != CREADO and not restaurable:
         texto_diff = (texto_diff + " BÓVEDA NO CONFIABLE: la copia de respaldo falta o no coincide "
                       "con la baseline. No se restaura.").strip()
@@ -454,6 +479,8 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
             os.unlink(ruta)
             print(f"[+] AISLAMIENTO EXITOSO: Enlace simbólico fuera de la baseline eliminado (→ {destino_enlace})")
             resultado = CREADO
+            # Si el enlace estaba en el lugar de una carpeta, ahora sí se pueden reponer sus archivos
+            revisar_directorio(ruta)
         elif estado == CREADO:
             # Archivo que no está en la baseline: se aísla y no hay nada que restaurar.
             # Es automático en los dos modos: es una contención y se puede deshacer.
@@ -468,6 +495,10 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
 
             if not restaurable:
                 print("[-] NO SE RESTAURA: la bóveda no coincide con la baseline. Requiere revisión manual.")
+            elif carpeta_real_fuera_de_la_raiz(ruta) is not None:
+                # Se vuelve a mirar justo antes de escribir, por si la carpeta cambió mientras tanto
+                print("[-] NO SE RESTAURA: la carpeta del archivo es un enlace que lleva afuera del "
+                      "directorio vigilado. Requiere revisión manual.")
             elif not se_restaura_ahora(aprobado_por):
                 avisar_pendiente(ruta)
                 return PENDIENTE, evento_id
@@ -511,6 +542,9 @@ def aceptar_cambio(d):
     Devuelve (resultado, detalle).
     """
     ruta = d["ruta"]
+    if carpeta_real_fuera_de_la_raiz(ruta) is not None:
+        return "RECHAZADA", ("La carpeta del archivo es un enlace que lleva afuera del directorio vigilado: "
+                             "no se acepta.")
     if d["evento"] in (MODIFICADO, CREADO):
         # Se repone exactamente la versión que se mostró en la alerta: la copia de cuarentena
         copia = d["ruta_cuarentena"]

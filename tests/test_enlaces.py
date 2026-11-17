@@ -158,3 +158,88 @@ def test_en_una_ventana_de_mantenimiento_el_enlace_se_registra_sin_leer_el_desti
     assert "1234" not in registro["detalles_diff"]
     assert registro["ruta_cuarentena"] is None
     assert os.path.islink(ruta)   # autorizado: no se restaura
+
+
+# --- Una carpeta del camino reemplazada por un enlace (variante de M2) ---
+
+def carpeta_cambiada_por_enlace(entorno_monitor, afuera):
+    """Renombra sub/ y pone en su lugar un enlace a una carpeta de afuera del directorio vigilado."""
+    os.rename(entorno_monitor.ruta("sub"), entorno_monitor.ruta("sub.viejo"))
+    os.symlink(afuera, entorno_monitor.ruta("sub"))
+
+
+def test_no_restaura_a_traves_de_una_carpeta_reemplazada_por_un_enlace(entorno_monitor, tmp_path):
+    ruta = entorno_monitor.crear_en_baseline("sub/app.conf", b"estado cero\n")
+    afuera = tmp_path / "afuera"
+    afuera.mkdir()
+    carpeta_cambiada_por_enlace(entorno_monitor, afuera)
+
+    assert monitor_fim.procesar(ruta) == monitor_fim.NO_RESTAURADO
+
+    assert os.listdir(afuera) == []   # antes, la restauración escribía afuera/app.conf
+    assert entorno_monitor.tipos_de_evento() == ["ELIMINADO"]
+    assert f"enlace simbólico y lleva a {afuera}" in entorno_monitor.eventos[0]["detalles_diff"]
+    assert entorno_monitor.avisos == [{"tipo": "evento", "evento_id": 1, "resultado": "NO_RESTAURADO"}]
+
+
+def test_no_lee_a_traves_de_una_carpeta_reemplazada_por_un_enlace(entorno_monitor, tmp_path):
+    ruta = entorno_monitor.crear_en_baseline("sub/app.conf", b"estado cero\n")
+    afuera = tmp_path / "afuera"
+    afuera.mkdir()
+    (afuera / "app.conf").write_text("clave: 1234\n")
+    carpeta_cambiada_por_enlace(entorno_monitor, afuera)
+
+    assert monitor_fim.procesar(ruta) == monitor_fim.NO_RESTAURADO
+
+    registro = entorno_monitor.eventos[0]
+    assert "1234" not in registro["detalles_diff"]
+    assert registro["ruta_cuarentena"] is None
+    assert os.listdir("./cuarentena") == []
+    assert (afuera / "app.conf").read_text() == "clave: 1234\n"
+
+
+def test_al_quitar_el_enlace_de_la_carpeta_se_reponen_sus_archivos(entorno_monitor, tmp_path):
+    ruta = entorno_monitor.crear_en_baseline("sub/app.conf", b"estado cero\n")
+    afuera = tmp_path / "afuera"
+    afuera.mkdir()
+    carpeta_cambiada_por_enlace(entorno_monitor, afuera)
+
+    entorno_monitor.evento_creado(entorno_monitor.ruta("sub"))   # el aviso de inotify por el enlace
+
+    assert os.listdir(afuera) == []
+    assert not os.path.islink(entorno_monitor.ruta("sub"))
+    assert get_sha256(ruta) == entorno_monitor.hash_baseline(ruta)
+    assert entorno_monitor.tipos_de_evento() == ["CREADO", "ELIMINADO", "RESTAURADO"]
+
+
+def test_si_la_carpeta_se_cambia_por_un_enlace_justo_antes_de_restaurar_tampoco_escribe_afuera(
+        entorno_monitor, tmp_path, monkeypatch):
+    ruta = entorno_monitor.crear_en_baseline("sub/app.conf", b"estado cero\n")
+    afuera = tmp_path / "afuera"
+    afuera.mkdir()
+
+    # El cambio de carpeta ocurre mientras se registra el evento, después de la primera revisión
+    def registrar_y_cambiar(*args, **kwargs):
+        if not os.path.islink(entorno_monitor.ruta("sub")):
+            carpeta_cambiada_por_enlace(entorno_monitor, afuera)
+        return entorno_monitor.registrar(*args, **kwargs)
+
+    monkeypatch.setattr(monitor_fim, "log_to_db", registrar_y_cambiar)
+    os.remove(ruta)
+
+    assert monitor_fim.procesar(ruta) == monitor_fim.NO_RESTAURADO
+    assert os.listdir(afuera) == []
+
+
+def test_no_se_acepta_un_cambio_si_la_carpeta_paso_a_ser_un_enlace(entorno_monitor, tmp_path, monkeypatch):
+    monkeypatch.setattr("config.MODO_RESTAURACION", "aprobacion")
+    ruta = entorno_monitor.crear_en_baseline("sub/app.conf", b"estado cero\n")
+    with open(ruta, "a") as f:
+        f.write("cambio pendiente\n")
+    entorno_monitor.evento_modificado(ruta)
+    afuera = tmp_path / "afuera"
+    afuera.mkdir()
+    carpeta_cambiada_por_enlace(entorno_monitor, afuera)
+
+    assert monitor_fim.ejecutar_decision(entorno_monitor.decision(1, monitor_fim.ACEPTAR)) == "RECHAZADA"
+    assert os.listdir(afuera) == []
