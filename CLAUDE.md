@@ -13,21 +13,26 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - `Proyecto_07_Integridad_Archivos.md`: consigna de la cátedra. Sirve por los criterios de evaluación
   (implementación 30, cobertura de monitoreo 25, alertas 25, documentación 20). NO copiar su esquema.
 
-## Estado actual del código (octubre 2026)
+## Estado actual del código (noviembre 2026)
 - `config.py`: toda la configuración sale del `.env` (ver `.env.example`): `RUTAS_MONITOREADAS`
   (varios directorios separados por `:`), `DIR_BOVEDA`, `DIR_CUARENTENA`, `DIR_LOGS`,
   `PATRONES_IGNORADOS` y `MODO_RESTAURACION`. Las rutas se guardan absolutas; las relativas se
   resuelven desde la carpeta del proyecto. Por defecto se vigila `./directorio_prueba`.
 - `generar_baseline.py`: recorre las rutas monitoreadas, calcula SHA-256, owner (uid) y permisos
   octales, inserta eventos `BASELINE` en `registros_archivos` con un `version_baseline` nuevo en cada
-  corrida y copia cada archivo a la bóveda. Hay que volver a correrlo si cambian las rutas.
+  corrida y copia cada archivo a la bóveda. Hay que volver a correrlo si cambian las rutas. No sigue
+  enlaces simbólicos: los saltea y los lista por pantalla.
 - `boveda.py`: respaldo en disco. `respaldar()` copia con `shutil.copy2`; `restaurar()` repone con un
-  temporal `.fim_tmp_*` + `os.replace` (atómico); `limpiar_huerfanos()` saca lo que ya no está en la
-  baseline vigente. La bóveda espeja la ruta absoluta del archivo y está en `.gitignore`.
+  temporal de nombre aleatorio (`tempfile.mkstemp` en la misma carpeta, prefijo `.fim_tmp_`), copia
+  sobre el descriptor y `os.replace` (atómico). Mientras existe, el temporal figura en
+  `boveda.temporales_propios`. `limpiar_huerfanos()` saca lo que ya no está en la baseline vigente.
+  La bóveda espeja la ruta absoluta del archivo y está en `.gitignore`.
 - `bd.py`: una sola conexión reutilizable a PostgreSQL (`conectar()`, `ejecutar()` con reconexión).
-- `hashes.py`: `get_sha256()`. `metadatos.py`: `leer_owner_y_permisos()` (uid y modo octal, con el
-  dígito de setuid si lo hay). `filtros.py`: `PATRONES_IGNORADOS` y `es_ignorado()` (temporales de
-  editores y de la restauración). Los tres los comparten la baseline y el monitor.
+- `hashes.py`: `get_sha256()` (por ruta) y `sha256_de_descriptor()`. `metadatos.py`:
+  `leer_owner_y_permisos()` (uid y modo octal, con el dígito de setuid si lo hay; usa `lstat`).
+  `filtros.py`: `es_ignorado()` ignora los `PATRONES_IGNORADOS` (temporales de editores) y los
+  temporales propios de la restauración (`boveda.temporales_propios`); NO ignora por el prefijo
+  `.fim_tmp_`. Los tres los comparten la baseline y el monitor.
 - `pendientes.py`: log local `logs/eventos_pendientes.jsonl` para eventos que no llegaron a la BD.
 - `notificador.py`: después de cada evento, POST `{tipo, evento_id, resultado}` a `N8N_WEBHOOK_URL`
   con el header `X-FIM-Secreto`, en un hilo aparte (timeout 2 s). Sin esa variable no avisa.
@@ -53,6 +58,15 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
     que vio la persona pasa a la baseline de ese archivo solo, vía
     `generar_baseline.actualizar_archivo()`). Registra en `ejecuciones` y avisa a n8n.
   Esta respuesta automatizada es posterior al informe de avance.
+  - **Enlaces y aperturas (segunda instancia, hallazgo M2)**: `_procesar()` comprueba con `realpath`
+    que la carpeta real siga dentro del directorio vigilado (`carpeta_real_fuera_de_la_raiz()`), abre
+    el archivo una sola vez con `O_NOFOLLOW` (`abrir_archivo()`) y pasa el descriptor a
+    `_procesar_abierto()`: hash, diff, copia a cuarentena (`copiar_evidencia()`) y `fchmod`/`fchown`
+    salen de ese descriptor. Un enlace en el lugar de un archivo de la baseline es `MODIFICADO`
+    ("reemplazado por un enlace simbólico → destino") y se repone; un enlace nuevo es `CREADO` y se
+    elimina (en modo aprobación espera la decisión; aceptar se rechaza).
+  - **Candado entre procesos**: `exclusion()` suma al candado de hilos un `flock` sobre
+    `logs/monitor.lock`, para que el monitor espere a `restaurar.py`.
 - `sql/01_schema.sql`: esquema real exportado con pg_dump. La tabla tiene una columna `notificado`
   (boolean, default false) pensada para n8n que todavía no se usa.
 - `sql/02_baseline_versionada.sql`: columna `version_baseline`, índice único (ruta, versión) y vista
@@ -104,7 +118,21 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   alerta 125 ms con Telegram simulado y 1,1 s con el real; ejecución de una decisión 0,9 s (sondeo
   de 2 s); falsos positivos 0 % con el filtro y 50–67 % sin él. Detalle en `resultados/README.md`.
 
-## CÓDIGO CONGELADO (desde el 16/10/2026)
+## Segunda instancia (noviembre 2026)
+- El tribunal devolvió el TFI el 17/11/2026 (`docs/devolucion_primera_instancia.pdf`): hallazgos C1,
+  M1, M2, M3, m1–m9 y f1–f6. La respuesta por ID va en el Anexo I del informe.
+- M2 y m8 se corrigieron en 11 commits de código del 17/11/2026. **El código de la aplicación quedó
+  cerrado en `39c661c`** (193 tests). El informe distingue dos versiones: `81b1bc8` (medida en
+  octubre, secciones 5.1 a 5.8) y `39c661c` (final, sección 5.9).
+- Mediciones repetidas sobre `39c661c` el 17/11/2026: dos corridas de `medir_metricas.py` (B1 y B2)
+  y una de `medir_falsos_positivos.py`. No se repitieron la muestra con Telegram real ni el escaneo
+  periódico. B1 tuvo el COMMIT en su régimen rápido durante media corrida (mediana de restauración
+  22,4 ms); B2 dio 44,0 ms, como octubre (45,4 ms). El binario de 1 MB quedó unos 3 ms más lento.
+  Se informan las dos corridas; no elegir una. Detalle en la sección 6 de `resultados/README.md`.
+- `scripts/armar_readme_resultados.py` regenera solo las secciones 1 a 5 del README de resultados,
+  siempre con los archivos de octubre, y conserva la sección 6 (escrita a mano).
+
+## CÓDIGO CONGELADO (desde el 16/10/2026; reabierto solo para M2 y m8, cerrado en `39c661c`)
 - No se agregan funcionalidades. Solo se aceptan arreglos de errores, cada uno en su commit, con
   test que lo cubra cuando se pueda.
 - Si un arreglo toca el monitor, la baseline o los workflows, hay que volver a correr las
@@ -113,10 +141,24 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 ## Limitaciones conocidas (declararlas en el informe)
 - **Evidencia incompleta en escrituras largas o en varios pasos.** El monitor reacciona al primer
   evento de escritura y restaura enseguida; lo que el programa siga escribiendo después se pierde.
-  El ataque se frena, pero la copia en cuarentena y el diff muestran solo la primera parte.
+  El ataque se frena, pero la copia en cuarentena y el diff muestran solo la primera parte. Si el
+  mismo archivo sigue cambiando entre el hash y la copia, la copia no coincide con el hash: queda
+  anotado en la fila `RESTAURADO` y ese cambio no se puede aceptar.
+- **Enlaces simbólicos no soportados.** No entran en la baseline y el monitor elimina los que
+  encuentra (el enlace, no el destino). No apuntar a `/etc` tal como está: tiene enlaces legítimos
+  (765 en el equipo de desarrollo).
+- **Carrera residual al restaurar.** Entre el `realpath` de la carpeta y la creación del temporal
+  quedan microsegundos en los que la carpeta puede cambiarse por un enlace. Cerrarlo pide `dir_fd`;
+  se decidió no implementarlo y declararlo.
+- **`CREADO` se mueve por nombre.** Si el archivo nuevo se reemplaza entre el hash y el movimiento a
+  cuarentena, lo guardado puede no ser lo registrado; aceptar lo rechaza por hash.
+- **Diff en memoria.** El diff lee los dos archivos enteros; el hash y la copia van en bloques.
+- **Lecturas por nombre que quedan.** El hash de la fila `RESTAURADO`, los permisos que anota
+  `log_to_db` y la lectura de `generar_baseline.py` después del `islink`.
 - **Carpeta movida.** Si se mueve una carpeta entera, los archivos de la baseline se restauran en
   su lugar original y los movidos van a cuarentena, pero la carpeta nueva queda vacía en el
-  directorio vigilado: el monitor no borra directorios.
+  directorio vigilado: el monitor no borra directorios. Un enlace a directorio que estuviera dentro
+  de la carpeta movida recién se ve en el próximo escaneo inicial.
 - **Temporales ignorados.** Un archivo malicioso cuyo nombre coincida con `PATRONES_IGNORADOS`
   (por ejemplo `algo.tmp`) no se detecta. Es el costo de bajar los falsos positivos.
 - **BD caída.** Sin acceso a la baseline no se restaura: se guarda la evidencia y el evento queda

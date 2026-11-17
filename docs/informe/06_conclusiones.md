@@ -81,19 +81,48 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
 - **Evidencia incompleta en escrituras en varios pasos.** El monitor reacciona al primer evento de
   escritura y restaura enseguida. Si un programa escribe en varios pasos, lo que escribe después de la
   restauración se pierde: el ataque se frena, pero la copia en cuarentena y el diff muestran solo la
-  primera parte.
+  primera parte. Además, si el programa sigue escribiendo sobre el mismo archivo entre el cálculo del
+  hash y la copia a cuarentena, la copia no coincide con el hash registrado. La apertura única del
+  archivo (sección 4.4) evita que se copie otro archivo, pero no esto: el caso queda anotado en la
+  fila `RESTAURADO`, con el hash de la copia, y un cambio en ese estado no se puede aceptar.
+- **Enlaces simbólicos no soportados.** La línea base solo admite archivos comunes. El generador de
+  línea base saltea los enlaces y los lista, y el monitor trata como no autorizado cualquier enlace
+  que encuentre en un directorio vigilado: lo registra con su destino y lo elimina (en modo de
+  aprobación, cuando la persona lo decide). Esto impide vigilar tal como está un directorio que
+  contenga enlaces legítimos. Es el caso de `/etc`: en el equipo de desarrollo, `find /etc -type l`
+  encuentra 765 enlaces, entre ellos `/etc/resolv.conf` y `/etc/mtab`.
+- **Archivo nuevo movido por nombre.** Un archivo que no figura en la línea base se mueve a
+  cuarentena por su nombre, porque un renombrado no se puede hacer sobre un descriptor. El movimiento
+  no sigue enlaces, pero si el archivo se reemplaza entre el cálculo del hash y el movimiento, lo que
+  queda en cuarentena puede no ser lo que se registró. Al aceptar un cambio se verifica el hash de la
+  copia, de modo que esa diferencia no pasa a la línea base.
+- **Diff en memoria.** Para calcular el diff, el archivo alterado y su copia de la bóveda se leen
+  completos en memoria. El hash y la copia a cuarentena se hacen en bloques, pero un archivo de texto
+  muy grande ocupa memoria en proporción a su tamaño.
 - **Archivos temporales ignorados.** Un archivo cuyo nombre coincida con los patrones ignorados (por
   ejemplo, `algo.tmp`) no se detecta.
 - **Solo directorios.** Se vigilan directorios; no se puede configurar un archivo suelto.
 - **Carpeta movida.** Si se mueve un directorio entero, sus archivos de la línea base se restauran en su
   lugar original y los movidos van a cuarentena, pero el directorio nuevo queda vacío: el monitor no
-  borra directorios.
+  borra directorios. Si el directorio movido contenía un enlace simbólico a otro directorio, ese
+  enlace no se revisa en el momento: se detecta en el siguiente escaneo inicial.
 
 ### Respuesta
 
 - **Bóveda en el mismo equipo.** La copia confiable está en el mismo disco y pertenece al mismo usuario
   que los archivos vigilados. Verificar su hash contra la base de datos antes de restaurar impide
-  restaurar una copia alterada, pero no impide que la alteren.
+  restaurar una copia alterada, pero no impide que la alteren. La verificación y la copia abren el
+  archivo de la bóveda por separado, igual que ocurre con la copia de cuarentena al aceptar un cambio:
+  quien pueda escribir en esas carpetas podría cambiar el archivo entre una y otra.
+- **Intervalo entre comprobar la carpeta y escribir.** Antes de restaurar se comprueba que la carpeta
+  real del archivo siga dentro del directorio vigilado (sección 4.3), pero entre esa comprobación y
+  la creación del temporal queda un intervalo muy corto en el que la carpeta podría reemplazarse por
+  un enlace. Con el monitor ejecutado como superusuario, quien ganara esa carrera lograría que se
+  escriba un archivo de la línea base en otra carpeta. Cerrarlo del todo requiere abrir la carpeta
+  tramo por tramo sin seguir enlaces y crear el temporal relativo a ese descriptor (sección 7.2).
+- **Lecturas por nombre que quedan.** El hash de la fila `RESTAURADO` y los permisos que acompañan a
+  cada evento se leen por el nombre del archivo después de responder, y el generador de línea base
+  comprueba que la ruta no sea un enlace y después la lee por su nombre.
 - **Propietario.** Reponer el propietario de un archivo requiere ejecutar el monitor como superusuario;
   sin esos permisos, el cambio se registra pero no se repone.
 - **Base de datos caída.** Sin acceso a la línea base no se restaura: se guarda la evidencia y el evento

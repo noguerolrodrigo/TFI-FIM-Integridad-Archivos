@@ -1,30 +1,50 @@
 # Anexos
 
-## Anexo A: Repositorio y versión evaluada
+## Anexo A: Repositorio y versiones evaluadas
 
 El código fuente, las migraciones de la base de datos, los workflows de n8n, los scripts de medición
 y los resultados están en un repositorio público:
 
 <https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos>
 
-La versión descripta y medida en este informe es la del commit de congelamiento del código, del 16
-de octubre de 2026:
+El informe se refiere a dos versiones del código:
+
+**Versión medida en octubre (primera instancia).** Es el commit de congelamiento del 16 de octubre
+de 2026, sobre el que se hicieron las mediciones de las secciones 5.1 a 5.8 y que auditó el
+tribunal:
 
 `81b1bc8709a2949010d4c4b97a9c5ca3a184276d`
 
 <https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos/tree/81b1bc8709a2949010d4c4b97a9c5ca3a184276d>
 
-Para obtener exactamente esa versión:
+**Versión final corregida (segunda instancia).** Es el commit del 17 de noviembre de 2026 que cierra
+el código de la aplicación, sobre el que se hicieron las mediciones de la sección 5.9:
+
+`39c661cf99c09befb887c7a8c47e095582aa58aa`
+
+<https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos/tree/39c661cf99c09befb887c7a8c47e095582aa58aa>
+
+Para obtener exactamente una de esas versiones:
 
 ```bash
 git clone https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos.git
 cd TFI-FIM-Integridad-Archivos
-git checkout 81b1bc8709a2949010d4c4b97a9c5ca3a184276d
+git checkout 39c661cf99c09befb887c7a8c47e095582aa58aa    # o 81b1bc8709a2949010d4c4b97a9c5ca3a184276d
 ```
 
-Los commits posteriores solo agregan los capítulos de este informe y sus figuras: el código, las
-migraciones, los workflows, los scripts y los tests no cambiaron después del congelamiento. Los
-fragmentos de los anexos siguientes son de esa versión, y los números de línea corresponden a ella.
+Entre una y otra hay 11 commits de código y pruebas, todos del 17 de noviembre de 2026, que
+corrigen la restauración y el tratamiento de los enlaces simbólicos (hallazgo M2 de la devolución)
+y ajustan una prueba que fallaba al ejecutarse como superusuario (m8): el temporal de la restauración
+pasa a tener nombre aleatorio y apertura exclusiva, el filtro deja de ignorar por prefijo, los
+enlaces simbólicos se detectan y no se siguen, el hash, el diff y la copia a cuarentena salen de una
+sola apertura del archivo, los permisos se reponen sobre el descriptor, se comprueba la carpeta real
+antes de restaurar, el generador de línea base saltea los enlaces y se agrega un candado entre el
+monitor y `restaurar.py`. No cambiaron las migraciones ni los workflows de n8n. Los demás commits
+posteriores al congelamiento agregan los capítulos de este informe, sus figuras, los resultados de
+las corridas nuevas y un ajuste del script que arma el resumen de resultados.
+
+Los fragmentos de los anexos siguientes son de la versión final, y los números de línea
+corresponden a ella.
 
 ## Anexo B: Estructura del repositorio
 
@@ -36,15 +56,15 @@ fragmentos de los anexos siguientes son de esa versión, y los números de líne
 | `generar_baseline.py` | Genera la línea base y la copia de cada archivo a la bóveda; actualiza la línea base de un único archivo. |
 | `monitor_fim.py` | Monitor por eventos: verificación, evidencia, respuesta, escaneo inicial y ejecución de decisiones. |
 | `restaurar.py` | Restauración aprobada por una persona en el modo de aprobación. |
-| `boveda.py` | Copia confiable de los archivos y restauración atómica. |
+| `boveda.py` | Copia confiable de los archivos y restauración atómica, con temporal de nombre aleatorio. |
 | `bd.py` | Conexión a PostgreSQL, con reconexión. |
-| `hashes.py`, `metadatos.py`, `filtros.py` | Cálculo de SHA-256, lectura de permisos y propietario, y patrones de archivos ignorados. |
+| `hashes.py`, `metadatos.py`, `filtros.py` | Cálculo de SHA-256, lectura de permisos y propietario (sin seguir enlaces), y archivos ignorados: patrones de temporales de editores y temporales propios de la restauración. |
 | `pendientes.py` | Registro local de los eventos que no llegaron a la base de datos. |
 | `notificador.py` | Aviso a n8n después de cada evento. |
 | `sql/` | Migraciones de la base de datos, numeradas de la 01 a la 06. |
 | `n8n/` | Workflows de n8n en JSON, scripts para iniciar n8n y el túnel ngrok, política del túnel y guía de instalación. |
 | `scripts/` | Base de datos de pruebas, n8n de pruebas con Telegram simulado y scripts de medición y resumen. |
-| `tests/` | 162 tests automatizados (pytest). |
+| `tests/` | 193 tests automatizados (pytest). |
 | `resultados/` | Mediciones en CSV, resúmenes, gráficos y descripción del entorno. |
 | `directorio_prueba/` | Directorio vigilado en las pruebas. |
 | `docs/` | Documentos de referencia y los capítulos de este informe. |
@@ -101,24 +121,28 @@ TELEGRAM_WEBHOOK_SUFIJO=
 
 ## Anexo D: Fragmentos clave del código
 
-Se transcriben los fragmentos que implementan las decisiones centrales del Capítulo 4. Donde se
-omitieron líneas, se indica con `# [...]`.
+Se transcriben los fragmentos que implementan las decisiones centrales del Capítulo 4, tomados de la
+versión final (Anexo A). Donde se omitieron líneas, se indica con `# [...]`.
 
-### D.1 Clasificación del cambio contra la línea base (`monitor_fim.py`, líneas 91–107)
+### D.1 Clasificación del cambio contra la línea base (`monitor_fim.py`, líneas 197–217)
 
 El evento del sistema de archivos solo dispara la verificación; la clasificación sale de comparar el
 estado real del archivo con la línea base vigente de la base de datos.
 
 ```python
-def verificar(ruta, hash_actual, owner=None, permisos=None):
+def verificar(ruta, hash_actual, owner=None, permisos=None, es_enlace=False):
     """Compara el estado actual del archivo (hash None si no está en disco) con la baseline vigente.
 
     Devuelve (estado, baseline). El estado es SIN_CAMBIOS, MODIFICADO, CREADO, ELIMINADO o PERMISOS.
+    Un enlace simbólico nunca coincide con la baseline, apunte a donde apunte: la baseline solo
+    tiene archivos comunes.
     """
     baseline = obtener_baseline(ruta)
     if baseline is None:
         # No figura en la baseline: si existe es un archivo nuevo; si no existe, no hay nada que mirar
-        return (SIN_CAMBIOS if hash_actual is None else CREADO), None
+        return (SIN_CAMBIOS if hash_actual is None and not es_enlace else CREADO), None
+    if es_enlace:
+        return MODIFICADO, baseline
     if hash_actual is None:
         return ELIMINADO, baseline
     if hash_actual != baseline["hash"]:
@@ -129,7 +153,7 @@ def verificar(ruta, hash_actual, owner=None, permisos=None):
     return SIN_CAMBIOS, baseline
 ```
 
-### D.2 Los eventos como disparadores (`monitor_fim.py`, líneas 566–592)
+### D.2 Los eventos como disparadores (`monitor_fim.py`, líneas 754–780)
 
 Los cuatro manejadores de watchdog llaman a la misma función, `procesar()`.
 
@@ -163,10 +187,12 @@ class FIMEventHandler(FileSystemEventHandler):
             procesar(event.dest_path, movido_desde=event.src_path)
 ```
 
-### D.3 Evidencia y respuesta (`monitor_fim.py`, fragmentos de las líneas 297–421)
+### D.3 Evidencia y respuesta (`monitor_fim.py`, fragmentos de las líneas 416–594)
 
-El orden es: verificar, registrar la evidencia en la base de datos, copiarla a cuarentena y, recién
-después, restaurar. Solo se restaura si la copia de la bóveda sigue teniendo el hash de la línea base.
+El orden es: comprobar la carpeta, abrir el archivo una sola vez sin seguir enlaces, verificar,
+registrar la evidencia en la base de datos, copiarla a cuarentena y, recién después, restaurar. Solo
+se restaura si la copia de la bóveda sigue teniendo el hash de la línea base y la carpeta real sigue
+dentro del directorio vigilado.
 
 ```python
 def _procesar(ruta, movido_a, movido_desde, aprobado_por):
@@ -177,17 +203,36 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     if es_ignorado(ruta):
         return SIN_CAMBIOS, None
 
-    # None si el archivo no está en disco
-    h = get_sha256(ruta)
-    # [...]
-    owner, permisos = leer_owner_y_permisos(ruta)
+    # Si una carpeta del camino es un enlace que lleva afuera del directorio vigilado, el archivo
+    # de la baseline ya no está en su lugar: lo que haya del otro lado no se lee ni se toca
+    carpeta_afuera = carpeta_real_fuera_de_la_raiz(ruta)
+
+    # El archivo se abre una sola vez y sin seguir enlaces. Un enlace simbólico no se abre:
+    # no se le calcula hash ni se lee o copia su destino
+    descriptor, destino_enlace = (None, None) if carpeta_afuera is not None else abrir_archivo(ruta)
+    try:
+        return _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera,
+                                 movido_a, movido_desde, aprobado_por)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, movido_a, movido_desde, aprobado_por):
+    """Clasifica y responde con el archivo ya abierto (descriptor es None si no está o es un enlace)."""
+    if carpeta_afuera is not None:
+        h, owner, permisos = None, "N/A", "N/A"
+    else:
+        # None si el archivo no está en disco (o si es un enlace)
+        h = sha256_de_descriptor(descriptor) if descriptor is not None else None
+        # [...]
+        owner, permisos = leer_owner_y_permisos(ruta)
 
     # La verdad está en la baseline de la BD
     try:
-        estado, baseline = verificar(ruta, h, owner, permisos)
+        estado, baseline = verificar(ruta, h, owner, permisos, es_enlace=destino_enlace is not None)
     except Exception as e:
         # [...]
-        guardar_sin_verificar(nombre, ruta, h, e)
+        guardar_sin_verificar(nombre, ruta, h, e, destino_enlace, descriptor)
         return SIN_VERIFICAR, None
 
     if estado == SIN_CAMBIOS:
@@ -198,7 +243,8 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     if aprobado_por is None:
         ventana_id = ventana_que_autoriza(ruta)
         if ventana_id is not None:
-            return registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a)
+            return registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a,
+                                        destino_enlace, descriptor)
     # [...]
     hash_baseline = baseline["hash"] if baseline else None
     # [...]
@@ -209,9 +255,13 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
 
     # La evidencia: qué pasó y, si se modificó el contenido, el Diff exacto
     # [...]
-    elif restaurable:
-        texto_diff = calcular_diff(respaldo, ruta)
+    elif destino_enlace is not None:
+        texto_diff = f"El archivo de la baseline fue reemplazado por un enlace simbólico → {destino_enlace}."
     # [...]
+    elif restaurable:
+        texto_diff = calcular_diff(respaldo, descriptor)
+    # [...]
+    # Solo hay algo para guardar en cuarentena si el archivo está en disco
     ruta_cuarentena = nueva_ruta_cuarentena(nombre) if h is not None else None
 
     # Si viene de restaurar.py, la detección ya la registró el monitor
@@ -221,8 +271,17 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
                               hash_anterior=hash_baseline, ruta_cuarentena=ruta_cuarentena)
     # [...]
     resultado = NO_RESTAURADO
+    nota_copia = ""
     try:
-        if estado == CREADO:
+        if estado == CREADO and destino_enlace is not None:
+            # [...]
+            if not se_restaura_ahora(aprobado_por):
+                avisar_pendiente(ruta)
+                return PENDIENTE, evento_id
+            # unlink quita el enlace y no toca el destino; a dónde apuntaba ya quedó en el registro
+            os.unlink(ruta)
+            # [...]
+        elif estado == CREADO:
             # Archivo que no está en la baseline: se aísla y no hay nada que restaurar.
             # Es automático en los dos modos: es una contención y se puede deshacer.
             shutil.move(ruta, ruta_cuarentena)
@@ -230,11 +289,15 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
             resultado = CREADO
         else:
             if h is not None:
-                # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia)
-                shutil.copy2(ruta, ruta_cuarentena)
+                # 1. CUARENTENA: Copiamos el archivo alterado tal cual (evidencia), desde el mismo
+                # descriptor del que salió el hash
+                nota_copia = nota_si_la_copia_difiere(h, copiar_evidencia(descriptor, ruta_cuarentena))
                 # [...]
             if not restaurable:
                 print("[-] NO SE RESTAURA: la bóveda no coincide con la baseline. Requiere revisión manual.")
+            elif carpeta_real_fuera_de_la_raiz(ruta) is not None:
+                # Se vuelve a mirar justo antes de escribir, por si la carpeta cambió mientras tanto
+                # [...]
             elif not se_restaura_ahora(aprobado_por):
                 avisar_pendiente(ruta)
                 return PENDIENTE, evento_id
@@ -242,7 +305,8 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
                 # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
                 boveda.restaurar(ruta)
                 log_to_db(nombre, ruta, get_sha256(ruta), RESTAURADO,
-                          f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por),
+                          f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por)
+                          + nota_copia,
                           hash_anterior=h, ruta_cuarentena=ruta_cuarentena)
                 # [...]
                 resultado = RESTAURADO
@@ -252,7 +316,7 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     return resultado, evento_id
 ```
 
-### D.4 Restauración atómica (`boveda.py`, líneas 30–39)
+### D.4 Restauración atómica y temporales propios (`boveda.py`, líneas 36–65; `filtros.py`, líneas 14–19)
 
 ```python
 def reponer_desde(origen, ruta):
@@ -262,9 +326,38 @@ def reponer_desde(origen, ruta):
 
     # Se copia a un temporal en la misma carpeta y se renombra encima del original:
     # el renombrado es atómico, así que el archivo nunca falta ni queda a medio escribir.
-    temporal = os.path.join(carpeta, PREFIJO_TEMPORAL + nombre)
-    shutil.copy2(origen, temporal)
-    os.replace(temporal, ruta)
+    with open(origen, "rb") as fuente:
+        # mkstemp elige un nombre aleatorio y crea el archivo con O_CREAT | O_EXCL | O_NOFOLLOW:
+        # si en ese nombre ya hay algo (por ejemplo un enlace simbólico puesto por un atacante),
+        # falla y prueba con otro en vez de escribir a través del enlace.
+        descriptor, temporal = tempfile.mkstemp(prefix=PREFIJO_TEMPORAL, dir=carpeta)
+        temporales_propios.add(temporal)
+        try:
+            # Todo se hace sobre el descriptor ya abierto, no sobre el nombre: aunque alguien
+            # cambie lo que hay en ese nombre, se sigue escribiendo en el archivo que se creó.
+            with os.fdopen(descriptor, "wb") as destino:
+                shutil.copyfileobj(fuente, destino)
+                destino.flush()
+                datos = os.fstat(fuente.fileno())
+                os.fchmod(destino.fileno(), stat.S_IMODE(datos.st_mode))
+                os.utime(destino.fileno(), ns=(datos.st_atime_ns, datos.st_mtime_ns))
+            # os.replace renombra el nombre, sin seguir enlaces: si ruta es un enlace, lo reemplaza
+            os.replace(temporal, ruta)
+        except BaseException:
+            if os.path.lexists(temporal):
+                os.unlink(temporal)
+            raise
+        finally:
+            temporales_propios.discard(temporal)
+```
+
+```python
+def es_ignorado(ruta):
+    """Indica si es un temporal propio de la restauración o si su nombre coincide con un patrón ignorado."""
+    if os.path.abspath(ruta) in boveda.temporales_propios:
+        return True
+    nombre = os.path.basename(ruta)
+    return any(fnmatch.fnmatch(nombre, patron) for patron in config.PATRONES_IGNORADOS)
 ```
 
 ### D.5 Aviso a n8n (`notificador.py`, líneas 13–36)
@@ -299,7 +392,7 @@ def _enviar(url, datos):
         print(f"[!] No se pudo avisar a n8n ({datos}): {e}")
 ```
 
-### D.6 Ejecución de las decisiones (`monitor_fim.py`, líneas 468–487)
+### D.6 Ejecución de las decisiones (`monitor_fim.py`, líneas 652–671)
 
 n8n registra la decisión de la persona en la tabla `decisiones`; el monitor la valida y la aplica.
 
@@ -326,7 +419,7 @@ def _ejecutar_decision(d):
     return "RECHAZADA", f"Decisión desconocida: {d['decision']}."
 ```
 
-### D.7 Aceptar un cambio en un único archivo (`generar_baseline.py`, líneas 80–121)
+### D.7 Aceptar un cambio en un único archivo (`generar_baseline.py`, líneas 97–140)
 
 Aceptar un cambio genera una versión nueva de la línea base en la que solo cambia ese archivo; las
 demás filas vigentes se copian tal cual.
@@ -340,6 +433,8 @@ def actualizar_archivo(ruta, motivo):
     cambio pendiente en otro archivo. Devuelve el número de la versión nueva.
     """
     ruta = os.path.abspath(ruta)
+    if os.path.islink(ruta):
+        raise ValueError(f"{ruta} es un enlace simbólico: la baseline solo admite archivos comunes.")
     with bd.candado:
         conn = bd.conectar()
         try:
@@ -374,6 +469,103 @@ def actualizar_archivo(ruta, motivo):
     else:
         boveda.quitar(ruta)
     return version
+```
+
+### D.8 Apertura única sin seguir enlaces y copia de la evidencia (`monitor_fim.py`, líneas 132–173)
+
+```python
+def abrir_archivo(ruta):
+    """Abre el archivo una sola vez, sin seguir enlaces. Devuelve (descriptor, destino_enlace):
+
+    - (descriptor, None): es un archivo común. El hash, el diff y la copia a cuarentena se sacan
+      todos de ese descriptor. Así se refieren al mismo archivo aunque después alguien cambie lo
+      que hay en ese nombre (por otro archivo o por un enlace). Lo cierra quien llama.
+    - (None, destino): es un enlace simbólico que apunta a destino. No se abre.
+    - (None, None): no está en disco, no se puede leer o no es un archivo común.
+    """
+    try:
+        # O_NOFOLLOW: si el último tramo de la ruta es un enlace, falla con ELOOP en vez de seguirlo.
+        # O_NONBLOCK: no se queda esperando si lo que hay es una tubería (FIFO).
+        descriptor = os.open(ruta, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as e:
+        if e.errno == errno.ELOOP:
+            try:
+                return None, os.readlink(ruta)
+            except OSError:
+                pass
+        return None, None
+    if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        return None, None
+    return descriptor, None
+
+def copiar_evidencia(descriptor, destino):
+    """Copia a la cuarentena el archivo ya abierto, en bloques, con sus permisos y fechas.
+
+    Devuelve el SHA-256 de lo que copió, para poder compararlo con el hash registrado.
+    """
+    sha256_hash = hashlib.sha256()
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    # "x": crea el archivo y falla si ya existía algo con ese nombre
+    with open(destino, "xb") as copia:
+        for bloque in iter(lambda: os.read(descriptor, 65536), b""):
+            sha256_hash.update(bloque)
+            copia.write(bloque)
+        copia.flush()
+        datos = os.fstat(descriptor)
+        os.fchmod(copia.fileno(), stat.S_IMODE(datos.st_mode))
+        os.utime(copia.fileno(), ns=(datos.st_atime_ns, datos.st_mtime_ns))
+    return sha256_hash.hexdigest()
+```
+
+### D.9 Carpeta real del archivo (`monitor_fim.py`, líneas 182–195)
+
+```python
+def carpeta_real_fuera_de_la_raiz(ruta):
+    """Si la carpeta del archivo, resolviendo enlaces, quedó fuera de su directorio vigilado,
+    devuelve dónde está en realidad. Si sigue adentro (lo normal), devuelve None.
+
+    Pasa cuando una carpeta del camino se reemplazó por un enlace simbólico: lstat y O_NOFOLLOW
+    solo miran el último tramo de la ruta, no las carpetas intermedias.
+    """
+    for directorio in config.RUTAS_MONITOREADAS:
+        if config.dentro_de(ruta, directorio):
+            carpeta_real = os.path.realpath(os.path.dirname(ruta))
+            if config.dentro_de(carpeta_real, os.path.realpath(directorio)):
+                return None
+            return carpeta_real
+    return None
+```
+
+### D.10 Candado entre hilos y entre procesos (`monitor_fim.py`, líneas 50–75)
+
+```python
+# restaurar.py corre en otro proceso y también restaura: el candado de arriba no lo alcanza. Para
+# que el monitor no procese un archivo mientras el otro proceso está a mitad de una restauración
+# (y tome su temporal por un archivo nuevo), los dos piden además un candado del sistema operativo
+# (flock) sobre este archivo de la carpeta de logs.
+NOMBRE_CANDADO = "monitor.lock"
+_veces_tomado = 0
+
+@contextlib.contextmanager
+def exclusion():
+    """Un archivo a la vez: entre los hilos de este proceso y entre este proceso y restaurar.py."""
+    global _veces_tomado
+    with candado:
+        descriptor = None
+        if _veces_tomado == 0:
+            # Solo lo pide la entrada de más afuera: como el candado de hilos, es reentrante
+            carpeta = os.path.dirname(config.ARCHIVO_PENDIENTES)
+            os.makedirs(carpeta, exist_ok=True)
+            descriptor = os.open(os.path.join(carpeta, NOMBRE_CANDADO), os.O_RDONLY | os.O_CREAT, 0o644)
+            fcntl.flock(descriptor, fcntl.LOCK_EX)   # espera si lo tiene otro proceso
+        _veces_tomado += 1
+        try:
+            yield
+        finally:
+            _veces_tomado -= 1
+            if descriptor is not None:
+                os.close(descriptor)   # al cerrar el descriptor se suelta el candado
 ```
 
 ## Anexo E: Base de datos
@@ -567,6 +759,8 @@ python scripts/armar_readme_resultados.py
 ## Anexo H: Resultados versionados
 
 Los datos en los que se basa el Capítulo 5 están en `resultados/`, tal como salieron de los scripts.
+Los archivos con fecha de octubre corresponden a las secciones 5.1 a 5.8 y los del 17 de noviembre, a
+la sección 5.9.
 
 **Tabla H.1.** Archivos de resultados.
 
@@ -584,4 +778,9 @@ Los datos en los que se basa el Capítulo 5 están en `resultados/`, tal como sa
 | `resumen_falsos_positivos_20261015_233331.md` | Tasas de falsos positivos. |
 | `escaneo_periodico_20261015_235418.csv` | Duración del escaneo completo y validación con un período de 10 s. |
 | `resumen_escaneo_periodico_20261015_235418.md` | Resumen del escaneo periódico. |
-| `README.md` | Lectura de los resultados y comparación con la tabla supuesta del documento de diseño. |
+| `metricas_20261117_195343.csv` y `metricas_20261117_200705.csv` | Corridas B1 y B2 sobre la versión corregida (sección 5.9), con el mismo formato que la de octubre. |
+| `resumen_20261117_195343.csv` / `.md` y `resumen_20261117_200705.csv` / `.md` | Resumen por caso y métrica de B1 y B2. |
+| `grafico_20261117_195343.png` y `grafico_20261117_200705.png` | Gráficos de cajas de B1 y B2. |
+| `entorno_metricas_20261117_195343.json` y `entorno_metricas_20261117_200705.json` | Entorno de B1 y B2. |
+| `falsos_positivos_20261117_200051.csv` y `resumen_falsos_positivos_20261117_200051.md` | Ediciones con vim y nano sobre la versión corregida. |
+| `README.md` | Lectura de los resultados, comparación con la tabla supuesta del documento de diseño y comparación entre la versión de octubre y la corregida (sección 6). |

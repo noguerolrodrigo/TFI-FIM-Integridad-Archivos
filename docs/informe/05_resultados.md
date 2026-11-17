@@ -6,6 +6,10 @@ del proyecto (carpeta `scripts/`) y se informan tal como fueron registrados: no 
 valores atípicos ni se repitieron corridas para mejorar los resultados. La fuente de cada tabla se
 indica al pie. Los valores se expresan en milisegundos (ms) salvo que se indique otra unidad.
 
+Las secciones 5.1 a 5.8 corresponden a la versión medida en octubre de 2026 (commit `81b1bc8`), que
+es la que se evaluó en la primera instancia, y conservan sus números. La sección 5.9 presenta las
+mediciones que se repitieron sobre la versión corregida (commit `39c661c`).
+
 ## 5.1 Condiciones de medición
 
 Las mediciones se realizaron el 15 y el 16 de octubre de 2026 sobre una notebook con procesador
@@ -314,3 +318,91 @@ La Figura 5.1 resume la distribución de las mediciones de la corrida principal.
 latencia de alerta (Telegram simulado) y la ejecución de decisiones. Cada punto es una repetición;
 las cajas indican el rango intercuartil y la mediana. Cada panel tiene su propia escala. Fuente:
 `resultados/grafico_20261015_232407.png`.
+
+## 5.9 Efecto de las correcciones de la segunda instancia
+
+Las correcciones de la restauración y del tratamiento de los enlaces simbólicos (secciones 4.3 y
+4.4) agregan trabajo en el camino que se mide: la comprobación de la carpeta real, el candado entre
+procesos y un segundo cálculo de hash al copiar la evidencia. Para saber si cambian los resultados,
+el 17 de noviembre de 2026 se repitieron sobre el commit `39c661c` las mediciones que dependen del
+código modificado, con el mismo protocolo, la misma semilla (2026), la misma máquina y las mismas
+versiones de software que en octubre (fuente: `resultados/entorno_metricas_20261117_195343.json` y
+`resultados/entorno_metricas_20261117_200705.json`).
+
+Se repitieron la corrida principal (`scripts/medir_metricas.py`, 50 repeticiones por caso) y la de
+editores reales (`scripts/medir_falsos_positivos.py`, 20 ediciones por editor), porque cambió el
+filtro de archivos ignorados. No se repitieron la muestra con el bot real de Telegram, porque el
+camino de la alerta no se modificó y esa medición requiere responder desde el teléfono, ni la
+comparación con el escaneo periódico, que no usa el código modificado.
+
+La corrida principal se ejecutó dos veces seguidas, que aquí se llaman B1 y B2. La segunda no estaba
+prevista: se agregó porque en la primera la mediana de la restauración resultó la mitad que en
+octubre, algo que los cambios del código no explican. Las dos corridas se versionaron completas y no
+se descartó ningún valor; ambas produjeron los 1100 valores esperados, sin faltantes, y la base
+productiva no recibió filas (identificador máximo 64 antes y después).
+
+**Tabla 5.11.** Mediana y p95 de cada métrica en la versión de octubre y en la versión corregida, en ms.
+
+| Métrica | n | `81b1bc8` (octubre) | `39c661c`, corrida B1 | `39c661c`, corrida B2 |
+|---|---:|---:|---:|---:|
+| Detección (MTTD), cinco casos | 250 | 5,4 / 7,8 | 5,3 / 7,7 | 5,1 / 9,1 |
+| Restauración en disco, cinco casos | 250 | 45,4 / 54,1 | 22,4 / 54,9 | 44,0 / 57,6 |
+| Fila `RESTAURADO`, cuatro casos | 200 | 46,8 / 57,8 | 24,1 / 58,5 | 45,3 / 60,7 |
+| Latencia de alerta (Telegram simulado) | 250 | 124,7 / 143,4 | 108,7 / 142,7 | 127,3 / 143,5 |
+| Ejecución de una decisión | 50 | 938,6 / 1951,7 | 952,2 / 1983,2 | 926,0 / 1942,2 |
+| COMMIT con el disco en reposo | 50 | 37,9 / 42,4 | 37,5 / 42,8 | 37,6 / 42,9 |
+| COMMIT en ráfaga | 50 | 1,8 / 3,1 | 2,1 / 3,3 | 1,3 / 2,6 |
+
+*Fuente: `resultados/metricas_20261015_232407.csv`, `resultados/metricas_20261117_195343.csv` (B1) y
+`resultados/metricas_20261117_200705.csv` (B2). Cada celda es mediana / p95.*
+
+**Tabla 5.12.** Restauración en disco por caso (mediana / p95), en ms.
+
+| Caso | `81b1bc8` (octubre) | `39c661c`, corrida B1 | `39c661c`, corrida B2 |
+|---|---:|---:|---:|
+| Texto (2 KB) | 47,3 / 50,9 | 16,4 / 47,7 | 44,3 / 49,7 |
+| Binario (1 MB) | 52,3 / 56,1 | 27,4 / 57,3 | 55,9 / 62,1 |
+| Permisos | 44,3 / 50,8 | 29,4 / 50,4 | 42,8 / 47,3 |
+| Borrado | 45,1 / 52,4 | 16,0 / 48,4 | 44,3 / 48,6 |
+| Archivo nuevo (aislamiento) | 44,4 / 49,3 | 16,9 / 47,5 | 43,2 / 46,0 |
+
+*Fuente: las mismas de la Tabla 5.11.*
+
+**Los dos regímenes del COMMIT.** Como se explicó en la sección 5.2, el tiempo de restauración
+incluye el COMMIT de la fila de detección, que en este disco tarda cerca de 38 ms o unos pocos
+milisegundos según el momento. En octubre, 30 de las 250 restauraciones tardaron menos de 20 ms; en
+B2 fueron 23. En B1 fueron 120, y no repartidas al azar: 103 ocurrieron en las primeras 25
+repeticiones de cada caso, y en esa primera mitad solo 5 de las 125 restauraciones alcanzaron los
+35 ms que son habituales en las otras dos corridas. En la segunda mitad de B1 los valores volvieron
+a ser los de octubre (105 de 125 restauraciones de 35 ms o más; en octubre, 106). La mediana de B1 (22,4 ms) cae entre los dos regímenes y no describe a ninguno
+de ellos; por eso su p95 (54,9 ms) es prácticamente el de octubre (54,1 ms). No hay evidencia de que
+esa diferencia se deba al código: B2, con el mismo commit, dio una mediana de 44,0 ms. La causa del
+régimen rápido durante media corrida no se verificó, porque no se registraron métricas del disco ni
+del sistema anfitrión; es consistente con la dependencia del almacenamiento de WSL2 ya señalada.
+
+Para comparar las versiones sin mezclar regímenes se tomaron solo las restauraciones de 35 ms o más:
+su mediana fue de 46,1 ms en octubre (214 valores), 46,1 ms en B1 (110) y 44,7 ms en B2 (215).
+
+**El caso del archivo binario de 1 MB empeoró.** Con ese mismo criterio, la mediana del caso binario
+pasó de 52,6 ms en octubre (42 valores) a 55,2 ms en B1 (22) y 56,1 ms en B2 (45), y su p95 sobre
+las 50 repeticiones pasó de 56,1 ms a 57,3 y 62,1 ms. El aumento, de unos 3 ms, es consistente con
+el cambio realizado: la copia a cuarentena ahora vuelve a calcular el hash de lo que copia, y ese
+costo crece con el tamaño del archivo. No se midió por separado. En los otros cuatro casos la
+diferencia con octubre es de 3 ms o menos, en ambos sentidos.
+
+**Detección, alerta, decisiones y controles.** La detección tuvo medianas de 5,3 ms (B1) y 5,1 ms
+(B2), frente a 5,4 ms. La latencia de alerta fue 16,1 ms menor en B1 y 2,6 ms mayor en B2 que en
+octubre. La ejecución de decisiones y los dos controles de COMMIT quedaron dentro de la variación
+entre corridas. Los valores máximos de restauración fueron 230,9 ms en B1 (caso binario, repetición
+15) y 65,9 ms en B2, frente a los 396,4 ms de octubre.
+
+**Editores reales.** La corrida con vim y nano dio los mismos conteos que en octubre: con el filtro,
+ninguna alerta espuria en 20 ediciones con cada editor; sin el filtro, 20 espurias sobre 40 alertas
+con vim y 40 sobre 60 con nano (fuente: `resultados/resumen_falsos_positivos_20261117_200051.md`).
+El cambio del filtro, que dejó de ignorar el prefijo de los temporales de la restauración, no
+modificó este resultado.
+
+En síntesis, las correcciones no cambiaron la detección ni la alerta de forma distinguible, la
+restauración de archivos chicos quedó en los mismos valores, y la del archivo de 1 MB es unos 3 ms
+más lenta. Las conclusiones del capítulo se mantienen con los valores de octubre, que son los de la
+versión auditada.

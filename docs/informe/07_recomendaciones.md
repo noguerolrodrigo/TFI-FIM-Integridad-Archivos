@@ -5,11 +5,18 @@ un entorno productivo y las líneas de trabajo futuro que surgen de las limitaci
 
 ## 7.1 Para un uso en producción
 
-1. **Ejecutar el monitor como servicio y con los permisos necesarios.** Para vigilar directorios del
-   sistema y reponer el propietario de los archivos, el monitor debe ejecutarse con permisos de
-   superusuario, como servicio del sistema operativo, para que se reinicie solo ante una falla y al
-   arrancar el equipo. Antes de hacerlo, debe evaluarse vigilando directorios del sistema, algo que no
-   formó parte de este trabajo.
+1. **Ejecutar el monitor como servicio y, solo bajo ciertas condiciones, como superusuario.** El
+   monitor debería ejecutarse como servicio del sistema operativo, para que se reinicie solo ante una
+   falla y al arrancar el equipo. Vigilar directorios del sistema y reponer el propietario de los
+   archivos requiere además permisos de superusuario, y con esos permisos cualquier defecto de la
+   restauración tiene más alcance. Por eso, antes de ejecutarlo como superusuario deben cumplirse
+   tres condiciones. Primero, que el directorio vigilado no contenga enlaces simbólicos legítimos, o
+   que antes se implemente su soporte en la línea base (sección 7.2): con la versión actual, el
+   monitor eliminaría los enlaces que encuentre, por lo que no debe apuntarse a `/etc` tal como está
+   (en el equipo de desarrollo contiene 765 enlaces). Segundo, que se cierre el intervalo entre la
+   comprobación de la carpeta y la escritura (secciones 6.4 y 7.2), o que nadie más que el
+   administrador pueda escribir en los directorios vigilados. Tercero, que se evalúe el monitor
+   vigilando directorios del sistema, algo que no formó parte de este trabajo.
 2. **Proteger la bóveda.** Ubicar la copia confiable en otro equipo, o al menos hacer que pertenezca a
    un usuario distinto del que puede modificar los archivos vigilados, de modo que comprometer un
    archivo no permita también alterar su copia.
@@ -42,9 +49,17 @@ un entorno productivo y las líneas de trabajo futuro que surgen de las limitaci
    programa termina de escribir el archivo, sin demorar la restauración, y medir cuánto cambia el
    tiempo de exposición.
 5. **Manejar los directorios movidos.** Detectar y aislar el directorio nuevo que queda vacío cuando se
-   mueve un directorio entero.
-6. **Ampliar la evaluación.** Repetir las mediciones en un servidor con disco nativo, con directorios
+   mueve un directorio entero, y revisar en el momento los enlaces que contenga.
+6. **Soportar enlaces simbólicos en la línea base.** Registrar cada enlace como tal, con su destino,
+   para poder vigilar directorios que los contienen (como `/etc`) y detectar si un enlace se crea, se
+   borra o cambia de destino, en lugar de eliminarlos.
+7. **Restaurar sin depender de los nombres de las carpetas.** Abrir la carpeta de destino tramo por
+   tramo desde el directorio vigilado, sin seguir enlaces, y crear y renombrar el temporal relativo a
+   ese descriptor (`dir_fd`), para eliminar el intervalo que hoy queda entre comprobar la carpeta y
+   escribir. Con el mismo criterio, mover a cuarentena los archivos nuevos y leer la bóveda sin
+   volver a abrir por nombre lo que ya se verificó.
+8. **Ampliar la evaluación.** Repetir las mediciones en un servidor con disco nativo, con directorios
    de miles de archivos, con ráfagas de cambios simultáneos y con actualizaciones reales de paquetes,
    para medir los falsos positivos en un sistema en operación.
-7. **Probar los casos pendientes.** Verificar de punta a punta el aviso de 24 horas sin decisión y el
+9. **Probar los casos pendientes.** Verificar de punta a punta el aviso de 24 horas sin decisión y el
    funcionamiento con permisos de superusuario sobre directorios del sistema.

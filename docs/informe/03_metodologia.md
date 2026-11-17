@@ -22,7 +22,10 @@ trabajo se organizó en cuatro etapas: mejoras del motor de monitoreo, orquestac
 con n8n, medición y redacción del informe. Cada mejora se implementó como un cambio pequeño y
 verificable, registrado en un commit del control de versiones y acompañado, cuando fue posible, por
 pruebas automatizadas. Al finalizar la etapa de medición se congeló el código, de modo que los
-resultados del Capítulo 5 correspondan a una versión fija del sistema.
+resultados del Capítulo 5 correspondan a una versión fija del sistema. Las correcciones pedidas en
+la primera instancia de evaluación se hicieron con el mismo método (primero una prueba que reproduce
+el problema, después el cambio mínimo que lo resuelve, un cambio por commit), y sobre la versión
+corregida se repitieron las mediciones que dependen del código modificado (sección 5.9).
 
 **Evaluación.** La evaluación consistió en mediciones repetidas en un entorno de laboratorio
 controlado, sobre la versión congelada. No se trata de un experimento con grupo de control, sino de
@@ -69,7 +72,9 @@ provienen del mismo reloj y no hay desfase entre ellas.
 
 ### Verificación funcional
 
-El comportamiento del sistema se verificó con 162 pruebas automatizadas (pytest). Las pruebas del
+El comportamiento del sistema se verificó con 193 pruebas automatizadas (pytest); eran 162 en la
+versión medida en octubre, y las 31 restantes acompañan las correcciones de la segunda instancia
+(sección 5.9). Las pruebas del
 monitor usan una línea base en memoria para no depender de la base de datos; las de integración se
 ejecutan sobre una base separada (`fim_pruebas`), que un script reconstruye con el mismo esquema que
 la base productiva. Además se realizaron pruebas de punta a punta con el monitor real, una instancia

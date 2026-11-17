@@ -12,10 +12,31 @@ si fue un incidente o un cambio autorizado; esa decisión la orquesta n8n y la e
 
 ## Estado del proyecto
 
-El código está **congelado en el commit `81b1bc8`** (16/10/2026) para la entrega del TFI. Desde
-entonces solo se agregaron documentación, el informe final y este README; no se tocó la lógica del
-monitor, de la baseline ni de los workflows. Todas las mediciones de [`resultados/`](resultados/)
-corresponden a ese commit.
+El código se congeló en el commit `81b1bc8` (16/10/2026) para la primera entrega del TFI, y sobre
+ese commit se hicieron las mediciones de octubre.
+
+Después de la devolución del tribunal (17/11/2026) se corrigió un defecto de seguridad de la
+restauración y el tratamiento de los enlaces simbólicos. El código de la aplicación quedó **cerrado
+en el commit `39c661c`** (17/11/2026). Qué cambió entre uno y otro:
+
+- El temporal de la restauración tiene nombre aleatorio y se crea con apertura exclusiva
+  (`tempfile.mkstemp`); antes era `.fim_tmp_<nombre>` y la restauración seguía enlaces simbólicos.
+- El monitor ya no ignora los archivos por el prefijo `.fim_tmp_`: solo ignora los temporales que él
+  mismo tiene creados en ese momento.
+- Los enlaces simbólicos no se siguen. Un archivo de la baseline reemplazado por un enlace se
+  detecta y se repone; un enlace nuevo se registra y se elimina (en modo aprobación, espera la
+  decisión). `generar_baseline.py` saltea los enlaces y avisa.
+- El hash, el diff y la copia a cuarentena salen de una sola apertura del archivo (`O_NOFOLLOW`), y
+  los permisos se reponen sobre el descriptor (`fchmod`, `fchown`).
+- Antes de restaurar se comprueba que la carpeta real del archivo siga dentro del directorio vigilado.
+- `restaurar.py` y el monitor comparten un candado (`flock` sobre `logs/monitor.lock`).
+
+**No apuntar el monitor a directorios con enlaces simbólicos legítimos (por ejemplo `/etc`):** los
+enlaces no entran en la baseline y el monitor los elimina. Esta y las demás limitaciones están en la
+sección 6.4 del informe.
+
+Las mediciones de octubre y las que se repitieron sobre `39c661c` están en
+[`resultados/`](resultados/), cada una con su fecha.
 
 ## Arquitectura
 
@@ -30,7 +51,8 @@ corresponden a ese commit.
 | Telegram + ngrok | Botones para decidir desde el celular. ngrok publica una sola ruta, con sufijo aleatorio y secreto. |
 
 Módulos auxiliares: `boveda.py` (copia confiable y restauración atómica), `bd.py` (conexión),
-`hashes.py`, `metadatos.py`, `filtros.py` (temporales de editores que se ignoran), `notificador.py`
+`hashes.py`, `metadatos.py`, `filtros.py` (temporales de editores y temporales propios de la
+restauración, que se ignoran), `notificador.py`
 (aviso a n8n), `pendientes.py` (log local si la BD no responde) y `restaurar.py` (restauración
 manual con aprobación).
 
@@ -177,7 +199,7 @@ el `.env`, el monitor registra y guarda la evidencia pero espera la decisión an
 pytest
 ```
 
-Son 162 tests. Los del monitor usan una baseline en memoria y no necesitan base de datos. Los de
+Son 193 tests. Los del monitor usan una baseline en memoria y no necesitan base de datos. Los de
 conexión se saltean si PostgreSQL no está. `tests/test_integracion_bd.py` usa una base aparte,
 `fim_pruebas`, que se prepara con `scripts/preparar_bd_pruebas.sh`; nunca toca `fim_db`.
 
@@ -185,7 +207,9 @@ conexión se saltean si PostgreSQL no está. `tests/test_integracion_bd.py` usa 
 
 Los resultados medidos están en [`resultados/`](resultados/): los CSV tal como salieron de los
 scripts, los resúmenes (media, mediana, p95, mínimo y máximo), los gráficos y el entorno de cada
-corrida. La lectura completa está en [`resultados/README.md`](resultados/README.md). Medianas:
+corrida. La lectura completa está en [`resultados/README.md`](resultados/README.md). Medianas de la
+corrida de octubre (commit `81b1bc8`); la comparación con las corridas sobre `39c661c` está en la
+sección 6 de ese README:
 
 | Métrica | Mediana |
 |---|---|

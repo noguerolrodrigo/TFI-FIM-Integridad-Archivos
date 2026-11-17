@@ -4,8 +4,11 @@ Este capítulo describe cómo se construyó el sistema en su versión final: el 
 documentado en el informe de avance, los problemas detectados en esa versión y la arquitectura que
 los resuelve. Se explican las decisiones de diseño principales y sus motivos, porque varias de ellas
 condicionan los resultados del Capítulo 5. El código fuente completo está en el repositorio del
-proyecto; los fragmentos y datos que se citan corresponden a la versión congelada el 16 de octubre
-de 2026.
+proyecto. El capítulo describe la versión final, cerrada el 17 de noviembre de 2026 (commit
+`39c661c`), que incorpora las correcciones pedidas en la primera instancia de evaluación sobre la
+versión congelada el 16 de octubre (commit `81b1bc8`). Esas correcciones se concentran en la
+restauración y en el tratamiento de los enlaces simbólicos (secciones 4.3 y 4.4); donde el
+comportamiento cambió respecto de la versión de octubre, se indica.
 
 ## 4.1 Punto de partida: la versión del informe de avance
 
@@ -39,7 +42,10 @@ controladas sobre una copia del monitor. Se detectaron los siguientes problemas:
 El desarrollo posterior se organizó en cuatro etapas, cada una formada por cambios pequeños y
 verificables (un cambio por commit): las mejoras del motor, la orquestación con n8n, la medición y la
 redacción de este informe. Entre el primer commit, el 12 de octubre de 2026, y el congelamiento del
-código, el 16 de octubre, el repositorio acumuló 50 commits.
+código, el 16 de octubre, el repositorio acumuló 50 commits. Los commits siguientes solo
+agregaron documentación y este informe. El 17 de noviembre de 2026, después de la devolución de la primera instancia, se agregaron 11 commits de código y pruebas con las correcciones
+descriptas en las secciones 4.3 y 4.4; el último de ellos, `39c661c`, es el commit número 80 del
+repositorio y cierra el código de la aplicación.
 
 ## 4.2 Arquitectura general
 
@@ -105,6 +111,12 @@ de las líneas base duplicadas se agregó una columna `version_baseline`: cada e
 `baseline_vigente`, devuelve las filas de la versión más alta. Las versiones anteriores no se borran
 ni se modifican: quedan como historial.
 
+Los enlaces simbólicos no entran en la línea base. `generar_baseline.py` no los sigue: los saltea y
+los lista por pantalla con su destino. Si los siguiera, registraría con la ruta del enlace el
+contenido de otro archivo, y la copia de la bóveda sería un archivo común que el monitor repondría
+en lugar del enlace. Las consecuencias de esta decisión para directorios como `/etc` se tratan en
+los Capítulos 6 y 7.
+
 Se eligió el versionado en lugar de borrar o actualizar las filas anteriores para mantener el
 registro de solo-agregar (sección 4.5). Por el mismo motivo, cuando una persona acepta un cambio en
 un archivo, no se rehace toda la línea base: la función `actualizar_archivo()` crea una versión nueva
@@ -119,8 +131,41 @@ replicando la ruta absoluta del archivo dentro de la bóveda.
 
 Para restaurar, el archivo se copia desde la bóveda a un archivo temporal en la misma carpeta y luego
 se renombra sobre el original con `os.replace`. El renombrado es una operación atómica del sistema
-de archivos, de modo que el archivo vigilado nunca queda faltante ni a medio escribir. Los archivos
-temporales llevan el prefijo `.fim_tmp_` y el monitor los ignora.
+de archivos, de modo que el archivo vigilado nunca queda faltante ni a medio escribir.
+
+En la versión de octubre, el temporal se llamaba siempre `.fim_tmp_<nombre>`, se escribía con
+`shutil.copy2` (que sigue enlaces simbólicos) y el monitor ignoraba cualquier archivo con ese
+prefijo. El tribunal evaluador mostró con una prueba de concepto que, si alguien con permiso de
+escritura en el directorio vigilado creaba de antemano un enlace simbólico con ese nombre, la
+restauración sobrescribía el archivo al que apuntaba el enlace, fuera del directorio vigilado, y el
+archivo vigilado quedaba convertido en ese enlace sin generar ninguna alerta. La prueba de concepto
+quedó incorporada a las pruebas automatizadas y la restauración se corrigió con tres cambios:
+
+- **Nombre aleatorio y apertura exclusiva.** El temporal se crea con `tempfile.mkstemp` en la misma
+  carpeta. El nombre se elige al azar en el momento y el archivo se abre con las opciones
+  `O_CREAT | O_EXCL | O_NOFOLLOW`: si en ese nombre ya existe algo, la creación falla y se prueba con
+  otro nombre. Así nadie puede preparar de antemano lo que el monitor va a abrir, y nunca se escribe
+  sobre algo que ya existía.
+- **Escritura sobre el descriptor.** El contenido, los permisos y las fechas se copian sobre el
+  descriptor del archivo recién creado (`os.fchmod`, `os.utime`), no sobre su nombre. Aunque alguien
+  cambie lo que hay en ese nombre mientras se copia, el monitor sigue escribiendo en el archivo que
+  él creó. El renombrado final tampoco sigue enlaces: si el archivo vigilado fue reemplazado por un
+  enlace, `os.replace` reemplaza el enlace.
+- **Registro de temporales propios.** `filtros.py` dejó de ignorar por prefijo, porque un nombre que
+  alcanza para ser ignorado es una forma de esconderse: cualquier archivo llamado `.fim_tmp_algo`
+  quedaba fuera de la vigilancia. Ahora solo se ignoran las rutas que figuran en
+  `boveda.temporales_propios`, el conjunto de temporales que el propio proceso tiene creados en ese
+  instante. Un archivo ajeno con ese prefijo se trata como cualquier archivo nuevo.
+
+**Carpeta real de destino.** Las opciones anteriores solo miran el último tramo de la ruta. Si una
+carpeta intermedia se reemplaza por un enlace simbólico a otra carpeta, la ruta del archivo vigilado
+pasa a apuntar fuera del directorio vigilado, y una restauración escribiría allí. Para evitarlo, el
+monitor resuelve la carpeta real del archivo con `os.path.realpath` y comprueba que siga dentro del
+directorio vigilado, antes de leer el archivo y otra vez inmediatamente antes de restaurar. Si no es
+así, no lee ni escribe: registra el evento con el motivo y avisa con el resultado `NO_RESTAURADO`.
+Cuando el enlace se elimina, se revisan los archivos de la línea base que estaban en esa carpeta
+para reponerlos. Entre la comprobación y la escritura queda un intervalo muy corto, que se declara
+como limitación en el Capítulo 6.
 
 Como la bóveda está en el mismo equipo, un atacante con acceso podría alterarla para que el monitor
 "restaure" un contenido malicioso. Para mitigarlo, antes de restaurar se verifica que la copia de la
@@ -153,10 +198,13 @@ Esta decisión tiene tres consecuencias:
 | Estado frente a la línea base | Evento registrado | Respuesta automática |
 |---|---|---|
 | Existe y su hash cambió | `MODIFICADO` | Copia a cuarentena y restauración desde la bóveda |
-| Mismo contenido, pero cambiaron permisos o propietario | `PERMISOS` | Se reponen permisos y propietario (`chmod`, `chown`) |
+| Mismo contenido, pero cambiaron permisos o propietario | `PERMISOS` | Se reponen permisos y propietario (`fchmod`, `fchown`) |
 | Figura en la línea base y no está en disco | `ELIMINADO` | Restauración desde la bóveda |
 | Igual que el anterior, pero el disparador fue un movimiento | `MOVIDO` (con el destino) | Restauración desde la bóveda |
 | Existe y no figura en la línea base | `CREADO` | Se mueve a cuarentena |
+| En la ruta de un archivo de la línea base hay un enlace simbólico | `MODIFICADO` (con el destino del enlace) | El enlace se reemplaza por el archivo de la bóveda |
+| Enlace simbólico que no figura en la línea base | `CREADO` (con el destino del enlace) | Se elimina el enlace, sin tocar su destino |
+| La carpeta del archivo lleva, por un enlace, fuera del directorio vigilado | `ELIMINADO` o `MOVIDO` (con el motivo) | Ninguna: no se lee ni se restaura |
 | Coincide con la línea base | (nada) | Ninguna |
 
 Cada restauración agrega una fila `RESTAURADO`, que permite medir el tiempo de restauración y auditar
@@ -179,14 +227,56 @@ quede asentado aunque la restauración falle, a costa de que el tiempo de restau
 confirmación de esa escritura en la base de datos. Como se muestra en el Capítulo 5, en el entorno de
 medición esa confirmación es el componente principal del tiempo de restauración.
 
+### Enlaces simbólicos y apertura única del archivo
+
+Las funciones habituales para leer un archivo (`open`, `os.stat`, `shutil.copy2`, `os.chmod`) siguen
+los enlaces simbólicos: si la ruta es un enlace, operan sobre el archivo al que apunta. En la
+versión de octubre el monitor usaba esas funciones, con dos consecuencias. Un archivo de la línea
+base reemplazado por un enlace a una copia idéntica se veía "sin cambios", porque el hash leído a
+través del enlace coincidía. Y si el enlace apuntaba a otro archivo, el contenido de ese archivo
+terminaba en el diff y en la cuarentena: el monitor leía, con sus permisos, lo que quien creó el
+enlace quizá no podía leer. La versión final aplica cuatro medidas:
+
+- **Mirar la ruta y no su destino.** El archivo se abre con la opción `O_NOFOLLOW`, que falla si el
+  último tramo de la ruta es un enlace, y los permisos y el propietario se leen con `os.lstat`, que
+  devuelve los datos de la ruta en sí. Un enlace nunca coincide con la línea base, apunte a donde
+  apunte, porque la línea base solo contiene archivos comunes. Si está en el lugar de un archivo de
+  la línea base se registra como `MODIFICADO`, con el texto "reemplazado por un enlace simbólico →
+  destino", y se repone desde la bóveda; si es nuevo se registra como `CREADO` y se elimina el
+  enlace. En ningún caso se calcula el hash del destino ni se lo lee o copia: la evidencia de un
+  enlace es a dónde apunta.
+- **Una sola apertura para el hash, el diff y la copia.** La versión de octubre abría el archivo
+  tres veces por su nombre: para calcular el hash, para armar el diff y para copiarlo a la
+  cuarentena. Entre una apertura y otra, el nombre podía pasar a designar otro archivo o un enlace,
+  de modo que se verificaba una cosa y se guardaba otra (un problema conocido como TOCTOU, *time of
+  check to time of use*). Ahora el archivo se abre una vez y las tres lecturas se hacen sobre ese
+  descriptor, que sigue refiriéndose al mismo archivo aunque cambie lo que hay en el nombre. El hash
+  y la copia se leen en bloques. Al copiar se vuelve a calcular el hash; si no coincide con el
+  registrado, porque el mismo archivo siguió cambiando, se deja constancia en la fila `RESTAURADO`.
+- **Permisos y propietario sobre el descriptor.** Los permisos y el propietario se reponen con
+  `os.fchmod` y `os.fchown`, que actúan sobre el archivo ya abierto. Con `os.chmod` y `os.chown`,
+  que siguen enlaces, un reemplazo del archivo por un enlace entre la verificación y la reposición
+  habría aplicado los permisos al archivo de destino. Por el mismo motivo, al aceptar un evento
+  `PERMISOS` se comprueba que en la ruta siga habiendo un archivo común; si no, la decisión se
+  rechaza.
+- **Candado entre procesos.** `restaurar.py` se ejecuta en un proceso distinto del monitor, y el
+  candado que ordena los hilos del monitor no lo alcanza. Desde que el prefijo del temporal no se
+  ignora, el monitor podía tomar por un archivo nuevo el temporal de una restauración hecha por
+  `restaurar.py`, registrar un `CREADO` falso y, si llegaba a moverlo a cuarentena, hacer fallar esa
+  restauración (el caso está reproducido en `tests/test_candado_entre_procesos.py`). Por eso el
+  procesamiento de cada archivo y la ejecución de cada decisión toman, además, un candado del
+  sistema operativo (`flock`) sobre el archivo `monitor.lock` de la carpeta de registros: el monitor
+  espera a que el otro proceso termine antes de mirar el archivo.
+
 ### Escaneo inicial y archivos ignorados
 
 Al arrancar, el monitor compara todos los archivos de la línea base, y los que haya en disco, contra
 la línea base. Así detecta lo que cambió mientras estaba apagado, una ventana que un monitor
 basado solo en eventos no cubre. Primero se empieza a escuchar eventos y después se escanea, para no
-dejar un intervalo sin cobertura; un candado hace que los archivos se procesen de a uno. El monitor no
-arranca si la línea base vigente no tiene archivos de las rutas configuradas, porque en ese caso
-todo parecería un archivo nuevo y terminaría en cuarentena.
+dejar un intervalo sin cobertura; un candado hace que los archivos se procesen de a uno. El escaneo
+incluye los enlaces simbólicos a directorios, que el recorrido del árbol lista como carpetas sin
+entrar en ellas. El monitor no arranca si la línea base vigente no tiene archivos de las rutas
+configuradas, porque en ese caso todo parecería un archivo nuevo y terminaría en cuarentena.
 
 Los archivos temporales de los editores (`*.swp`, `*.swo`, `*.swx`, `*~`, `*.tmp`, configurables) no
 se vigilan ni entran en la línea base. Su efecto sobre los falsos positivos se midió en el
@@ -200,7 +290,10 @@ los cambios legítimos de un administrador. Para equilibrarlo se implementaron d
 - **Modo de restauración configurable.** En modo `automatica` (por defecto) el monitor restaura
   apenas detecta el cambio. En modo `aprobacion` registra el evento y guarda la evidencia, pero no
   restaura hasta que una persona lo decide. Los archivos nuevos van a cuarentena en ambos modos,
-  porque el aislamiento es una contención reversible.
+  porque el aislamiento es una contención reversible. Un enlace simbólico nuevo es la excepción: no
+  se puede mover a cuarentena como un archivo, la respuesta es eliminarlo y eso no se deshace solo,
+  así que en modo `aprobacion` queda en su lugar hasta que una persona decide. "Restaurar" lo
+  elimina; "Aceptar" se rechaza, porque la línea base no admite enlaces.
 - **Ventanas de mantenimiento.** Antes de responder, el monitor consulta si hay una ventana vigente
   que cubra la ruta del archivo. Si la hay, registra el cambio con su diff y una copia en cuarentena,
   pero no lo restaura. Si las ventanas no se pueden consultar, se considera que no hay autorización y
@@ -381,13 +474,17 @@ webhook de Telegram sin mostrar los secretos en pantalla.
 
 ## 4.9 Pruebas automatizadas
 
-El proyecto cuenta con 162 pruebas automatizadas con pytest, que se ejecutan desde la raíz del
-repositorio. Cubren, entre otros aspectos:
+El proyecto cuenta con 193 pruebas automatizadas con pytest, que se ejecutan desde la raíz del
+repositorio (162 en la versión de octubre y 31 agregadas con las correcciones de la segunda
+instancia). Cubren, entre otros aspectos:
 
 - la bóveda (restauración de binarios y permisos, restauración atómica, archivos sin respaldo);
 - la clasificación de eventos y la respuesta a cada tipo, incluidos los movimientos y el reemplazo
   por renombrado;
 - los cambios de permisos y de propietario, el escaneo inicial y los archivos ignorados;
+- los enlaces simbólicos: la prueba de concepto del tribunal, el reemplazo de un archivo o de una
+  carpeta por un enlace, el cambio del archivo entre la verificación y la copia, y el candado entre
+  el monitor y `restaurar.py`;
 - los modos de restauración, las ventanas de mantenimiento y la ejecución de cada tipo de decisión;
 - el aviso a n8n, contra un servidor simulado;
 - el funcionamiento con la base de datos caída;
