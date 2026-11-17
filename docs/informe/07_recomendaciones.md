@@ -60,6 +60,6 @@ un entorno productivo y las líneas de trabajo futuro que surgen de las limitaci
    volver a abrir por nombre lo que ya se verificó.
 8. **Ampliar la evaluación.** Repetir las mediciones en un servidor con disco nativo, con directorios
    de miles de archivos, con ráfagas de cambios simultáneos y con actualizaciones reales de paquetes,
-   para medir los falsos positivos en un sistema en operación.
+   para medir las alertas espurias en un sistema en operación.
 9. **Probar los casos pendientes.** Verificar de punta a punta el aviso de 24 horas sin decisión y el
    funcionamiento con permisos de superusuario sobre directorios del sistema.

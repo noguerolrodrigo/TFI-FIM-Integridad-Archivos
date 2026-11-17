@@ -10,7 +10,7 @@ La investigación es **aplicada**, porque su producto es una solución tecnológ
 a un problema concreto: la falta de visibilidad y de respuesta ante modificaciones no autorizadas de
 archivos en servidores Linux. Es también **descriptiva**, porque caracteriza el comportamiento del
 sistema construido mediante mediciones cuantitativas de sus tiempos de detección, respuesta y alerta,
-y de los falsos positivos que genera en un uso controlado.
+y de las alertas espurias que genera en un uso controlado.
 
 ## 3.2 Diseño de la investigación
 
@@ -33,7 +33,7 @@ un estudio con condiciones controladas e iguales para todas las repeticiones. Se
 tipos de contraste:
 
 - **Interno:** la misma medición con y sin el filtro de archivos temporales, para estimar el efecto
-  de ese filtro sobre los falsos positivos.
+  de ese filtro sobre las alertas espurias.
 - **Externo:** la comparación con un escaneo periódico de integridad (del tipo que se programa con
   `cron`), combinando un cálculo teórico con una validación empírica en un período corto.
 
@@ -60,8 +60,16 @@ en que el script de medición terminó de escribir el archivo (después de cerra
 - **Duración del COMMIT:** tiempo que tarda PostgreSQL en confirmar una inserción, medido con el disco
   en reposo y en ráfaga. Se incorporó después de la corrida de prueba, al detectar que explicaba
   buena parte del tiempo de restauración.
-- **Tasa de falsos positivos:** alertas espurias dividido alertas totales, en un conjunto de ediciones
-  legítimas de archivos vigilados.
+- **Proporción de alertas espurias:** alertas espurias dividido alertas totales, en un conjunto de
+  ediciones legítimas de archivos vigilados. Si se llama verdadero positivo (VP) a una alerta
+  esperada y falso positivo (FP) a una alerta espuria, la proporción es FP / (VP + FP), es decir,
+  1 − precisión. No es la tasa de falsos positivos convencional, FP / (FP + VN), que divide por el
+  total de casos negativos e incluye los verdaderos negativos (VN): las operaciones que no debían
+  alertar y no alertaron. En este diseño los VN no se pueden contar, porque el monitor solo registra
+  lo que alerta y no existe una lista de todas las operaciones del editor que podrían haber generado
+  una alerta y no lo hicieron. Por eso se informa la proporción sobre las alertas, con ese nombre.
+  Los scripts y los archivos de resultados conservan el nombre original (`falsos_positivos`), y sus
+  resúmenes rotulan la columna como "tasa de falsos positivos"; se refieren a esta misma proporción.
 - **Duración de un escaneo completo (S) y tiempo de detección de un escaneo periódico:** para la
   comparación con el enfoque de escaneo programado.
 
@@ -120,7 +128,7 @@ guarda el identificador de cada evento. Es la única medición que registró fil
 Las diez alertas se cerraron como incidente desde el teléfono; esas decisiones no se usaron como
 medición, porque incluyen el tiempo humano.
 
-### Falsos positivos con editores reales
+### Alertas espurias con editores reales
 
 El script `scripts/medir_falsos_positivos.py` edita archivos vigilados con dos editores reales, vim y
 nano, controlados mediante una pseudoterminal que les envía pulsaciones de teclado: ir al final del
@@ -163,7 +171,7 @@ su plan gratuito.
 | `scripts/preparar_bd_pruebas.sh` | Reconstruye la base `fim_pruebas` con el esquema de la productiva |
 | `scripts/n8n_de_pruebas.sh` y `scripts/telegram_falso.py` | Instancia de n8n descartable con Telegram simulado |
 | `scripts/medir_metricas.py` | Tiempos de detección, restauración, alerta y ejecución, y costo del COMMIT |
-| `scripts/medir_falsos_positivos.py` | Falsos positivos con vim 9.1 y nano 7.2 |
+| `scripts/medir_falsos_positivos.py` | Alertas espurias con vim 9.1 y nano 7.2 |
 | `scripts/medir_escaneo_periodico.py` | Duración de un escaneo completo y escáner periódico de 10 s |
 | `scripts/resumir_metricas.py` | Estadísticos y gráficos a partir de los CSV |
 | `scripts/armar_readme_resultados.py` | Resumen general de resultados a partir de los CSV |

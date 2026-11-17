@@ -27,7 +27,9 @@ def f2(x): return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "
 
 met = ultimo("metricas_*.csv"); ent = json.load(open(ultimo("entorno_metricas_*.json")))
 real = ultimo("alerta_telegram_real_*.csv"); ent_real = json.load(open(ultimo("entorno_alerta_telegram_real_*.json")))
-fp_md = open(ultimo("resumen_falsos_positivos_*.md"), encoding="utf-8").read()
+# El resumen conserva el rótulo original; en el README se usa el nombre de la métrica del informe
+fp_md = (open(ultimo("resumen_falsos_positivos_*.md"), encoding="utf-8").read()
+         .replace("Tasa de falsos positivos", "Proporción de alertas espurias"))
 esc = ultimo("escaneo_periodico_*.csv"); esc_md = open(ultimo("resumen_escaneo_periodico_*.md"), encoding="utf-8").read()
 res_md = open(ultimo("resumen_2*.md"), encoding="utf-8").read()
 res_real_md = open(ultimo("resumen_telegram_real_*.md"), encoding="utf-8").read()
@@ -102,9 +104,14 @@ De la escritura a que n8n confirma el mensaje en Telegram: mediana {f2(percentil
 (entre {f2(min(punta_a_punta) / 1000)} y {f2(max(punta_a_punta) / 1000)} s). La diferencia con la
 alerta simulada (mediana {f1(percentil(alerta_sim, 50))} ms) es el viaje a los servidores de Telegram.
 
-## 3. Falsos positivos con editores reales (20 ediciones por editor)
+## 3. Alertas espurias con editores reales (20 ediciones por editor)
 
 Archivo: `{os.path.basename(ultimo('falsos_positivos_*.csv'))}`.
+
+La métrica es la **proporción de alertas espurias**: alertas espurias / alertas totales, es decir
+FP / (VP + FP). No es la tasa de falsos positivos convencional, FP / (FP + VN): acá no hay verdaderos
+negativos que se puedan contar. El script, el CSV y su resumen conservan el nombre original
+(`falsos_positivos`, "tasa de falsos positivos") y se refieren a esta misma proporción.
 
 {fp_md}
 ## 4. Comparación con un escaneo periódico (tipo cron)
@@ -126,7 +133,7 @@ números del FIM son los **medidos** en este paso.
 |---|---:|---:|---:|
 | Tiempo hasta detectar | 12 min | 4 min | {f1(percentil(mttd, 50))} ms hasta registrar la detección; {f2(percentil(punta_a_punta, 50) / 1000)} s hasta la alerta en Telegram (medianas) |
 | Tiempo hasta restaurar | 45 min | 25 min | {f1(percentil(mttr, 50))} ms en modo automático (mediana) |
-| Falsos positivos | 10 % | 5 % | 0 % con el filtro de temporales; 50 % (vim) y 66,7 % (nano) sin el filtro |
+| Falsos positivos (acá, proporción de alertas espurias) | 10 % | 5 % | 0 % con el filtro de temporales; 50 % (vim) y 66,7 % (nano) sin el filtro |
 
 Las definiciones no son idénticas, así que no se calcula un porcentaje de mejora:
 
@@ -134,7 +141,7 @@ Las definiciones no son idénticas, así que no se calcula un porcentaje de mejo
 - En modo aprobación, el tiempo hasta restaurar depende de la persona y no se midió. Lo que sí
   se midió es lo que agrega el sistema una vez que la persona decide: mediana
   {f1(percentil(ejec, 50))} ms.
-- La tasa de falsos positivos del FIM es la de dos editores en un caso controlado, no la de un
+- La proporción de alertas espurias del FIM es la de dos editores en un caso controlado, no la de un
   servidor en producción.
 """
 # Se conserva lo que haya a partir de la sección 6

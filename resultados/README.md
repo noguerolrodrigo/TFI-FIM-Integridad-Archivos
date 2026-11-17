@@ -81,18 +81,23 @@ De la escritura a que n8n confirma el mensaje en Telegram: mediana 1,11 s
 (entre 0,99 y 1,30 s). La diferencia con la
 alerta simulada (mediana 124,7 ms) es el viaje a los servidores de Telegram.
 
-## 3. Falsos positivos con editores reales (20 ediciones por editor)
+## 3. Alertas espurias con editores reales (20 ediciones por editor)
 
 Archivo: `falsos_positivos_20261015_233331.csv`.
 
-| Corrida | Editor | Ediciones | Alertas | Esperadas | Espurias | Tasa de falsos positivos | Ediciones con problemas del editor |
+La métrica es la **proporción de alertas espurias**: alertas espurias / alertas totales, es decir
+FP / (VP + FP). No es la tasa de falsos positivos convencional, FP / (FP + VN): acá no hay verdaderos
+negativos que se puedan contar. El script, el CSV y su resumen conservan el nombre original
+(`falsos_positivos`, "tasa de falsos positivos") y se refieren a esta misma proporción.
+
+| Corrida | Editor | Ediciones | Alertas | Esperadas | Espurias | Proporción de alertas espurias | Ediciones con problemas del editor |
 |---|---|---:|---:|---:|---:|---:|---:|
 | A_con_filtro | vim | 20 | 20 | 20 | 0 | 0.0 % | 0 |
 | A_con_filtro | nano | 20 | 20 | 20 | 0 | 0.0 % | 0 |
 | B_sin_filtro | vim | 20 | 40 | 20 | 20 | 50.0 % | 0 |
 | B_sin_filtro | nano | 20 | 60 | 20 | 40 | 66.7 % | 0 |
 
-Tasa de falsos positivos = alertas espurias / alertas totales.
+Proporción de alertas espurias = alertas espurias / alertas totales.
 
 Tipos de alertas espurias por corrida y editor:
 
@@ -136,7 +141,7 @@ números del FIM son los **medidos** en este paso.
 |---|---:|---:|---:|
 | Tiempo hasta detectar | 12 min | 4 min | 5,4 ms hasta registrar la detección; 1,11 s hasta la alerta en Telegram (medianas) |
 | Tiempo hasta restaurar | 45 min | 25 min | 45,4 ms en modo automático (mediana) |
-| Falsos positivos | 10 % | 5 % | 0 % con el filtro de temporales; 50 % (vim) y 66,7 % (nano) sin el filtro |
+| Falsos positivos (acá, proporción de alertas espurias) | 10 % | 5 % | 0 % con el filtro de temporales; 50 % (vim) y 66,7 % (nano) sin el filtro |
 
 Las definiciones no son idénticas, así que no se calcula un porcentaje de mejora:
 
@@ -144,7 +149,7 @@ Las definiciones no son idénticas, así que no se calcula un porcentaje de mejo
 - En modo aprobación, el tiempo hasta restaurar depende de la persona y no se midió. Lo que sí
   se midió es lo que agrega el sistema una vez que la persona decide: mediana
   938,6 ms.
-- La tasa de falsos positivos del FIM es la de dos editores en un caso controlado, no la de un
+- La proporción de alertas espurias del FIM es la de dos editores en un caso controlado, no la de un
   servidor en producción.
 
 ## 6. Segunda instancia: corridas sobre el commit `39c661c` (17/11/2026)
@@ -214,5 +219,5 @@ Restauración en disco por caso (mediana / p95):
   más lenta que A.
 - Valores máximos: 396,4 ms en A (la pausa general ya comentada), 230,9 ms en B1 (binario,
   repetición 15) y 65,9 ms en B2.
-- **Falsos positivos:** mismos resultados que en octubre. Con el filtro, 0 alertas espurias en 20
+- **Alertas espurias:** mismos resultados que en octubre. Con el filtro, 0 alertas espurias en 20
   ediciones con vim y 20 con nano; sin el filtro, 20 de 40 (vim) y 40 de 60 (nano).

@@ -16,7 +16,8 @@ con permisos mínimos.
 En un laboratorio sobre WSL2, con 50 repeticiones de cinco tipos de cambio, la detección tuvo una
 mediana de 5,4 ms y la restauración, de 45,4 ms, dominada por la escritura en la base de datos. La
 alerta llegó a Telegram con una mediana de 1,11 s, en diez alertas con el bot real. El filtro de
-archivos temporales bajó los falsos positivos de dos editores del 50,0 % y el 66,7 % al 0 %. Con un
+archivos temporales bajó la proporción de alertas espurias al editar con dos editores del 50,0 % y
+el 66,7 % al 0 %. Con un
 escaneo por minuto, la detección media estimada sería de unos 30 s. Los resultados corresponden a un
 único entorno y sus limitaciones se detallan en el informe.
 

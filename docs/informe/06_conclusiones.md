@@ -39,7 +39,7 @@ una única notebook con WSL2 y sus límites se discuten en la sección 6.4.
 | 4. Evidencia diferencial registrada con el evento | Cumplido, con una limitación en escrituras en varios pasos (6.4). | Cap. 4 (4.4) |
 | 5. Respuesta automática o sujeta a aprobación | Cumplido. Restauración automática o con aprobación, cuarentena y ventanas de mantenimiento. Reponer el propietario requiere superusuario. | Cap. 4 (4.4) |
 | 6. Notificación y decisión humana desde la alerta | Cumplido. Alerta por Telegram con botones y enlaces locales de respaldo, probada con el bot real. | Cap. 4 (4.6 y 4.7) |
-| 7. Medición de tiempos y falsos positivos, y contraste con el escaneo periódico | Cumplido. Mediciones repetidas, sin descartar valores, en un único entorno. | Cap. 5 |
+| 7. Medición de tiempos y de la proporción de alertas espurias, y contraste con el escaneo periódico | Cumplido. Mediciones repetidas, sin descartar valores, en un único entorno. | Cap. 5 |
 
 ## 6.3 Hallazgos principales
 
@@ -56,7 +56,7 @@ ráfaga, y explica la mayor parte de los 45,4 ms de restauración. Esto es conse
 de diseño (guardar la evidencia antes de restaurar), que prioriza no perder el registro sobre unos
 milisegundos de exposición.
 
-**El filtro de temporales elimina los falsos positivos de los editores, a un costo conocido.** Sin el
+**El filtro de temporales elimina las alertas espurias de los editores, a un costo conocido.** Sin el
 filtro, el 50,0 % de las alertas con vim y el 66,7 % con nano fueron espurias, todas por los archivos
 de intercambio de los editores; con el filtro, ninguna lo fue. A cambio, un archivo malicioso con un
 nombre que coincida con un patrón ignorado no se detecta.
@@ -157,7 +157,7 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
   dependen del almacenamiento y no son extrapolables a un servidor con disco nativo.
 - **Escala.** El directorio vigilado tenía pocos archivos y los cambios se aplicaron de a uno. No se
   evaluaron directorios con miles de archivos ni ráfagas de cambios simultáneos.
-- **Falsos positivos.** Se midieron con dos editores en un caso controlado, no en un sistema en
+- **Alertas espurias.** Se midieron con dos editores en un caso controlado, no en un sistema en
   operación con actualizaciones de paquetes y otros procesos.
 - **Muestra con Telegram real.** Tiene diez repeticiones y depende de la red y de un servicio externo.
 - **Valores atípicos.** En una repetición se observaron demoras simultáneas en procesos independientes,

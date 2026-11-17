@@ -81,8 +81,8 @@ desempeño.
    aislamiento en cuarentena de los archivos nuevos y mecanismos para autorizar cambios legítimos.
 6. Orquestar la notificación y la decisión humana con n8n y Telegram, de modo que la persona pueda
    confirmar un incidente, restaurar o aceptar un cambio desde la propia alerta.
-7. Medir los tiempos de detección, restauración, alerta y ejecución de decisiones, y la tasa de
-   falsos positivos, y contrastar el enfoque por eventos con el de escaneo periódico.
+7. Medir los tiempos de detección, restauración, alerta y ejecución de decisiones, y la proporción
+   de alertas espurias, y contrastar el enfoque por eventos con el de escaneo periódico.
 
 ## 1.5 Alcance y limitaciones
 

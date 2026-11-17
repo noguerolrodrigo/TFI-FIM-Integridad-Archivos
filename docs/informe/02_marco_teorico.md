@@ -123,9 +123,12 @@ Para evaluar un sistema de detección y respuesta se usan, entre otras, las sigu
   el sistema lo detecta y lo registra.
 - **MTTR** (*Mean Time To Respond* o *To Recover*): tiempo hasta que el sistema vuelve a su estado
   confiable; en este trabajo, hasta que el archivo queda restaurado.
-- **Tasa de falsos positivos:** proporción de alertas que no corresponden a un cambio que interese
-  señalar, como los archivos temporales que crea un editor al guardar. Un exceso de falsos positivos
-  hace que las alertas pierdan credibilidad.
+- **Proporción de alertas espurias:** parte de las alertas emitidas que no corresponde a un cambio
+  que interese señalar, como los archivos temporales que crea un editor al guardar. Una alerta
+  espuria es un falso positivo, y un exceso de ellas hace que las alertas pierdan credibilidad. No
+  debe confundirse con la tasa de falsos positivos en sentido estricto, que se calcula sobre los
+  casos negativos y no sobre las alertas; la diferencia y la fórmula usada se precisan en la
+  sección 3.3.
 
 Aunque los nombres hablan de tiempos medios, cuando las mediciones tienen valores atípicos la
 **mediana** describe mejor el comportamiento típico, y los percentiles altos, como el p95, describen el

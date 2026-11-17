@@ -217,7 +217,7 @@ sección 6 de ese README:
 | Tiempo de restauración (MTTR) | 45,4 ms (casi todo es el COMMIT de PostgreSQL) |
 | Alerta en Telegram | 125 ms con Telegram simulado, 1,1 s con el bot real |
 | Ejecución de una decisión | 0,9 s (sondeo cada 2 s) |
-| Falsos positivos al editar con vim y nano | 0 % con el filtro de temporales, 50–67 % sin él |
+| Proporción de alertas espurias al editar con vim y nano | 0 % con el filtro de temporales, 50–67 % sin él |
 
 Los scripts que las producen están en [`scripts/`](scripts/) (`medir_metricas.py`,
 `medir_falsos_positivos.py`, `medir_escaneo_periodico.py`, `resumir_metricas.py`). Corren contra

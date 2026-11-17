@@ -775,7 +775,7 @@ la sección 5.9.
 | `grafico_telegram_real_20261016_000516.png` | Gráfico de la muestra real. |
 | `entorno_alerta_telegram_real_20261016_000516.json` | Entorno de la muestra real. |
 | `falsos_positivos_20261015_233331.csv` | Ediciones con vim y nano, con y sin filtro de temporales. |
-| `resumen_falsos_positivos_20261015_233331.md` | Tasas de falsos positivos. |
+| `resumen_falsos_positivos_20261015_233331.md` | Proporción de alertas espurias por corrida y editor (el archivo la rotula "tasa de falsos positivos"). |
 | `escaneo_periodico_20261015_235418.csv` | Duración del escaneo completo y validación con un período de 10 s. |
 | `resumen_escaneo_periodico_20261015_235418.md` | Resumen del escaneo periódico. |
 | `metricas_20261117_195343.csv` y `metricas_20261117_200705.csv` | Corridas B1 y B2 sobre la versión corregida (sección 5.9), con el mismo formato que la de octubre. |

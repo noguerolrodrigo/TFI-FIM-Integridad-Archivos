@@ -169,7 +169,7 @@ tiempo de procesamiento. En consecuencia, una vez que la persona decide, el sist
 alrededor de un segundo en aplicar la decisión. El tiempo humano de decisión no forma parte de esta
 medición.
 
-## 5.5 Falsos positivos con editores reales
+## 5.5 Alertas espurias con editores reales
 
 Para evaluar el efecto del filtro de archivos temporales se editaron archivos vigilados con dos
 editores de texto reales, vim 9.1 y nano 7.2, controlados mediante una pseudoterminal que envía las
@@ -179,7 +179,7 @@ esperada la primera detección `MODIFICADO` del archivo editado, y espuria cualq
 
 **Tabla 5.7.** Alertas por corrida y editor (20 ediciones por editor).
 
-| Corrida | Editor | Alertas | Esperadas | Espurias | Tasa de falsos positivos |
+| Corrida | Editor | Alertas | Esperadas | Espurias | Proporción de alertas espurias |
 |---|---|---:|---:|---:|---:|
 | Con filtro | vim | 20 | 20 | 0 | 0,0 % |
 | Con filtro | nano | 20 | 20 | 0 | 0,0 % |
@@ -187,8 +187,9 @@ esperada la primera detección `MODIFICADO` del archivo editado, y espuria cualq
 | Sin filtro | nano | 60 | 20 | 40 | 66,7 % |
 
 *Fuente: `resultados/resumen_falsos_positivos_20261015_233331.md` (datos en
-`resultados/falsos_positivos_20261015_233331.csv`). Tasa de falsos positivos = alertas espurias /
-alertas totales.*
+`resultados/falsos_positivos_20261015_233331.csv`). Proporción de alertas espurias = alertas
+espurias / alertas totales (definición en la sección 3.3). Los archivos de resultados conservan su
+nombre y rotulan esta misma columna como "tasa de falsos positivos".*
 
 Sin el filtro, todas las alertas espurias correspondieron a los archivos de intercambio que crean
 los editores: `.vim.conf.swp` en el caso de vim (una por edición) y `.nano.conf.swp` en el caso de
@@ -198,8 +199,8 @@ configuración personal, por lo que rigió la del sistema: en Ubuntu, el archivo
 opción de bloqueo (`set locking`), que es la que crea los archivos `.swp` de nano, y vim guarda
 sobre el mismo archivo (`backupcopy=yes`), por lo que no se observaron renombrados intermedios.
 
-Estos valores describen un caso controlado con dos editores y no la tasa de falsos positivos de un
-servidor en producción, donde intervienen otros procesos (actualizaciones de paquetes, rotación de
+Estos valores describen un caso controlado con dos editores y no la proporción de alertas espurias
+de un servidor en producción, donde intervienen otros procesos (actualizaciones de paquetes, rotación de
 registros, etc.). Además, el filtro tiene un costo: un archivo malicioso cuyo nombre coincida con un
 patrón ignorado no se detecta, limitación que se retoma en el Capítulo 6.
 
@@ -250,7 +251,7 @@ medidos en este trabajo únicamente para dejar en claro la diferencia entre ambo
 |---|---:|---:|---|
 | Tiempo hasta la detección | 12 min | 4 min | 5,4 ms hasta registrar la detección; 1,11 s hasta la alerta en Telegram |
 | Tiempo hasta la restauración | 45 min | 25 min | 45,4 ms en modo de restauración automática |
-| Tasa de falsos positivos | 10 % | 5 % | 0 % con el filtro de temporales; 50,0 % (vim) y 66,7 % (nano) sin él |
+| Falsos positivos (en este trabajo, proporción de alertas espurias) | 10 % | 5 % | 0 % con el filtro de temporales; 50,0 % (vim) y 66,7 % (nano) sin él |
 
 *Fuentes: tabla de resultados del documento de diseño (valores supuestos) y `resultados/README.md`,
 sección 5 (valores medidos).*
@@ -259,8 +260,9 @@ No se calcula un porcentaje de mejora porque las definiciones no son equivalente
 diseño medía el tiempo de restauración a partir de la alerta y suponía una aprobación humana previa;
 en el modo de aprobación de este sistema, ese tiempo depende de la persona y no fue medido. Lo que sí
 se midió es el tiempo que agrega el sistema una vez tomada la decisión (mediana de 938,6 ms,
-sección 5.4). La tasa de falsos positivos medida corresponde, como se señaló, a un caso controlado
-con dos editores.
+sección 5.4). La fila de falsos positivos del documento de diseño se compara con la proporción de
+alertas espurias medida en este trabajo (sección 3.3), que corresponde, como se señaló, a un caso
+controlado con dos editores.
 
 ## 5.8 Valores atípicos y amenazas a la validez
 
@@ -305,8 +307,8 @@ Además, deben tenerse en cuenta las siguientes amenazas a la validez de los res
   evaluaron ráfagas de cambios simultáneos ni directorios con miles de archivos.
 - **Telegram:** la latencia de alerta real se midió con solo diez repeticiones y depende de la red y
   de un servicio externo.
-- **Falsos positivos:** se evaluaron dos editores en un caso controlado; no se midió la carga de
-  falsos positivos de un sistema en operación.
+- **Alertas espurias:** se evaluaron dos editores en un caso controlado; no se midió la carga de
+  alertas espurias de un sistema en operación.
 - **Modo de restauración:** las mediciones de MTTR corresponden al modo automático. En el modo de
   aprobación, la restauración depende del tiempo de respuesta humano.
 

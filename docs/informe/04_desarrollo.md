@@ -279,7 +279,7 @@ entrar en ellas. El monitor no arranca si la línea base vigente no tiene archiv
 configuradas, porque en ese caso todo parecería un archivo nuevo y terminaría en cuarentena.
 
 Los archivos temporales de los editores (`*.swp`, `*.swo`, `*.swx`, `*~`, `*.tmp`, configurables) no
-se vigilan ni entran en la línea base. Su efecto sobre los falsos positivos se midió en el
+se vigilan ni entran en la línea base. Su efecto sobre las alertas espurias se midió en el
 Capítulo 5. El costo es que un archivo malicioso con uno de esos nombres no se detecta.
 
 ### Modos de restauración y ventanas de mantenimiento
