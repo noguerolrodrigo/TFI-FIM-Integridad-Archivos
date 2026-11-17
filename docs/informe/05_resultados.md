@@ -323,8 +323,8 @@ Las correcciones de la restauración y del tratamiento de los enlaces simbólico
 procesos y un segundo cálculo de hash al copiar la evidencia. Para saber si cambian los resultados,
 el 17 de noviembre de 2026 se repitieron sobre el commit `39c661c` las mediciones que dependen del
 código modificado, con el mismo protocolo, la misma semilla (2026), la misma máquina y las mismas
-versiones de software que en octubre (fuente: `resultados/entorno_metricas_20261117_195343.json` y
-`resultados/entorno_metricas_20261117_200705.json`).
+versiones de software que en octubre (fuente: los dos archivos `entorno_metricas_20261117_*.json` de
+la carpeta `resultados/`).
 
 Se repitieron la corrida principal (`scripts/medir_metricas.py`, 50 repeticiones por caso) y la de
 editores reales (`scripts/medir_falsos_positivos.py`, 20 ediciones por editor), porque cambió el
@@ -350,8 +350,9 @@ productiva no recibió filas (identificador máximo 64 antes y después).
 | COMMIT con el disco en reposo | 50 | 37,9 / 42,4 | 37,5 / 42,8 | 37,6 / 42,9 |
 | COMMIT en ráfaga | 50 | 1,8 / 3,1 | 2,1 / 3,3 | 1,3 / 2,6 |
 
-*Fuente: `resultados/metricas_20261015_232407.csv`, `resultados/metricas_20261117_195343.csv` (B1) y
-`resultados/metricas_20261117_200705.csv` (B2). Cada celda es mediana / p95.*
+*Fuente: carpeta `resultados/`, archivos `metricas_20261015_232407.csv` (octubre),
+`metricas_20261117_195343.csv` (B1) y `metricas_20261117_200705.csv` (B2). Cada celda es
+mediana / p95.*
 
 **Tabla 5.12.** Restauración en disco por caso (mediana / p95), en ms.
 
@@ -436,7 +437,7 @@ sobre los datos de octubre, sin medir nada nuevo.
 | Escaneo completo de 719 archivos (S) | 20 | 9,7 | 9,4 a 9,8 |
 | Detección con escaneo cada 10 s | 30 | 4.292,0 | 2.341,7 a 5.970,7 |
 
-*Fuente: `resultados/intervalos_bootstrap_20261015.csv`, generado por
+*Fuente: `intervalos_bootstrap_20261015.csv`, en la carpeta `resultados/`, generado por
 `scripts/intervalos_bootstrap.py` (10.000 remuestras, semilla 2026) a partir de los CSV de las
 secciones 5.2 a 5.6.*
 

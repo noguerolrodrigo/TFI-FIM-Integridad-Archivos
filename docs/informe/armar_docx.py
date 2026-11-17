@@ -782,7 +782,7 @@ def volcar_capitulo(armador, ruta):
         if tipo == "titulo":
             armador.titulo(*contenido)
         elif tipo == "parrafo":
-            if es_referencias and re.search(r"\(\d{4}\)|\(s\.f\.", contenido):
+            if es_referencias and re.search(r"\(\d{4}[a-z]?\)|\(s\.f\.", contenido):
                 armador.referencia(contenido)
             else:
                 p = armador.parrafo(contenido)
