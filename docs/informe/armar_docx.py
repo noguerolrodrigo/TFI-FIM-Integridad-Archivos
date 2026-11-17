@@ -192,13 +192,24 @@ def limpiar_markdown(texto):
     return re.sub(r"[`*]", "", texto)
 
 
+# Entre un número y su unidad va un espacio fino de no separación (U+202F): "5 %", "1 h", "45,4 ms".
+# Así todas las unidades quedan con el mismo espaciado y el número no se separa de su unidad al
+# final de un renglón. No se aplica dentro del código.
+ESPACIO_FINO = "\u202f"
+PATRON_UNIDAD = re.compile(r"(?<=\d) ?(?=(?:%|ms|s|h|min|KB|MB|GB|pt)(?![\wáéíóúñ]))")
+
+
+def con_espacio_fino(texto):
+    return PATRON_UNIDAD.sub(ESPACIO_FINO, texto)
+
+
 def escribir_inline(p, texto, tamano=12, negrita_base=False, cursiva_base=False, tamano_codigo=None):
     """Escribe texto con `código`, **negrita**, *cursiva* y enlaces en el párrafo."""
     tamano_codigo = tamano_codigo or max(tamano - 1, 7)
     pos = 0
     for m in PATRON_INLINE.finditer(texto):
         if m.start() > pos:
-            run = p.add_run(texto[pos:m.start()])
+            run = p.add_run(con_espacio_fino(texto[pos:m.start()]))
             _fuente(run, tamano=tamano, negrita=negrita_base or None, cursiva=cursiva_base or None)
         trozo = m.group(0)
         if m.group(1):
@@ -216,7 +227,7 @@ def escribir_inline(p, texto, tamano=12, negrita_base=False, cursiva_base=False,
             escribir_inline(p, trozo[1:-1], tamano, negrita_base, True, tamano_codigo)
         pos = m.end()
     if pos < len(texto):
-        run = p.add_run(texto[pos:])
+        run = p.add_run(con_espacio_fino(texto[pos:]))
         _fuente(run, tamano=tamano, negrita=negrita_base or None, cursiva=cursiva_base or None)
 
 
