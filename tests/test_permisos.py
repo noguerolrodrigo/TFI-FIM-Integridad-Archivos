@@ -1,6 +1,8 @@
 import os
 import stat
 
+import pytest
+
 from hashes import get_sha256
 from metadatos import leer_owner_y_permisos
 
@@ -66,6 +68,9 @@ def test_contenido_y_permisos_cambiados_se_restauran_los_dos(entorno_monitor):
     assert entorno_monitor.tipos_de_evento() == ["MODIFICADO", "RESTAURADO"]
 
 
+# Como root no hay cambio que detectar: la baseline simulada dice que el dueño es root (uid 0)
+# y el archivo de prueba también lo sería. El caso solo tiene sentido con un usuario común.
+@pytest.mark.skipif(os.geteuid() == 0, reason="la prueba simula el cambio de dueño visto por un usuario que no es root")
 def test_cambio_de_propietario_sin_ser_root_se_registra_pero_no_se_puede_reponer(entorno_monitor, monkeypatch):
     ruta = entorno_monitor.crear_en_baseline("config.txt", b"estado cero\n")
     entorno_monitor.baseline[ruta]["owner"] = "0"   # la baseline dice que el dueño era root
