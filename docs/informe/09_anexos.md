@@ -363,8 +363,8 @@ def es_ignorado(ruta):
 
 ### D.5 Aviso a n8n (`notificador.py`, líneas 13–36)
 
-Solo se envían el tipo, el identificador del evento y el resultado; n8n lee el resto de la base de
-datos.
+Solo se envían tres datos: el tipo de aviso, el identificador del evento y el resultado (el aviso de
+una ejecución agrega el identificador de la decisión); n8n lee el resto de la base de datos.
 
 ```python
 def notificar(datos):

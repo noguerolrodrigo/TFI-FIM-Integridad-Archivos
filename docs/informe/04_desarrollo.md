@@ -355,8 +355,9 @@ como parte de un comando.
 
 ### Aviso del monitor (arquitectura push)
 
-Después de cada evento, el monitor envía a n8n un pedido HTTP con un único dato relevante: el
-identificador del evento y el resultado de la respuesta. El pedido lleva un encabezado con un secreto
+Después de cada evento, el monitor envía a n8n un pedido HTTP con tres datos: el tipo de aviso
+(un evento nuevo o la ejecución de una decisión), el identificador del evento y el resultado de la
+respuesta. El aviso de una ejecución agrega el identificador de la decisión. El pedido lleva un encabezado con un secreto
 compartido; si el secreto no coincide, n8n responde con el código 403 y no procesa nada. Toda la
 información de la alerta (archivo, hashes, diff, historial) la lee n8n de la base de datos, de modo
 que un aviso falso no puede inventar contenido. El aviso se envía en un hilo aparte y con un tiempo
