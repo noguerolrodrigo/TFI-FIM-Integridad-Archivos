@@ -146,3 +146,73 @@ Las definiciones no son idénticas, así que no se calcula un porcentaje de mejo
   938,6 ms.
 - La tasa de falsos positivos del FIM es la de dos editores en un caso controlado, no la de un
   servidor en producción.
+
+## 6. Segunda instancia: corridas sobre el commit `39c661c` (17/11/2026)
+
+Las secciones 1 a 5 describen las mediciones del commit `81b1bc8` (16/10/2026), que es la versión
+que auditó el tribunal, y no se modificaron. Después de la devolución se corrigió la restauración
+(hallazgo M2: temporal de nombre aleatorio, enlaces simbólicos, apertura única del archivo, candado
+entre procesos) y se volvió a medir con el mismo protocolo, la misma semilla (2026) y la misma
+máquina sobre el commit `39c661c`.
+
+**Atención:** `scripts/armar_readme_resultados.py` toma siempre los archivos más recientes. Si se
+vuelve a ejecutar, reescribe las secciones 1 a 5 con la última corrida y borra esta sección.
+
+Qué se repitió y qué no:
+
+- `scripts/medir_metricas.py --repeticiones 50`, dos veces seguidas (B1 y B2). La segunda se
+  agregó porque en la primera la restauración dio una mediana muy distinta (ver abajo). Las dos
+  quedan versionadas completas; no se descartó ningún valor.
+- `scripts/medir_falsos_positivos.py --ediciones 20`, porque cambió `filtros.py`.
+- No se repitió la muestra con el bot real de Telegram (el camino de la alerta no cambió y necesita
+  el teléfono) ni el escaneo periódico (no depende del código modificado).
+
+Archivos nuevos: `metricas_20261117_195343.csv` (B1), `metricas_20261117_200705.csv` (B2), sus
+`entorno_metricas_*.json`, `resumen_*.csv`, `resumen_*.md` y `grafico_*.png`, y
+`falsos_positivos_20261117_200051.csv` con su resumen. `fim_db` sin cambios en las dos corridas
+(64 → 64).
+
+### Comparación (ms; mediana / p95)
+
+| Métrica | n | `81b1bc8` (A) | `39c661c` B1 | `39c661c` B2 | Diferencia de medianas B1 − A | B2 − A |
+|---|---:|---:|---:|---:|---:|---:|
+| Detección (MTTD), 5 casos | 250 | 5,4 / 7,8 | 5,3 / 7,7 | 5,1 / 9,1 | −0,0 | −0,3 |
+| Restauración en disco, 5 casos | 250 | 45,4 / 54,1 | 22,4 / 54,9 | 44,0 / 57,6 | −23,1 | −1,4 |
+| Fila RESTAURADO (MTTR BD), 4 casos | 200 | 46,8 / 57,8 | 24,1 / 58,5 | 45,3 / 60,7 | −22,7 | −1,5 |
+| Alerta (Telegram simulado), 5 casos | 250 | 124,7 / 143,4 | 108,7 / 142,7 | 127,3 / 143,5 | −16,1 | +2,6 |
+| Ejecución de una decisión | 50 | 938,6 / 1951,7 | 952,2 / 1983,2 | 926,0 / 1942,2 | +13,6 | −12,6 |
+| COMMIT con el disco en reposo (control) | 50 | 37,9 / 42,4 | 37,5 / 42,8 | 37,6 / 42,9 | −0,4 | −0,3 |
+| COMMIT en ráfaga (control) | 50 | 1,8 / 3,1 | 2,1 / 3,3 | 1,3 / 2,6 | +0,3 | −0,5 |
+
+Restauración en disco por caso (mediana / p95):
+
+| Caso | `81b1bc8` (A) | `39c661c` B1 | `39c661c` B2 |
+|---|---:|---:|---:|
+| Texto (2 KB) | 47,3 / 50,9 | 16,4 / 47,7 | 44,3 / 49,7 |
+| Binario (1 MB) | 52,3 / 56,1 | 27,4 / 57,3 | 55,9 / 62,1 |
+| Permisos | 44,3 / 50,8 | 29,4 / 50,4 | 42,8 / 47,3 |
+| Borrado | 45,1 / 52,4 | 16,0 / 48,4 | 44,3 / 48,6 |
+| Archivo nuevo (aislamiento) | 44,4 / 49,3 | 16,9 / 47,5 | 43,2 / 46,0 |
+
+### Lectura
+
+- **La restauración tiene dos regímenes y B1 cambió de uno a otro a mitad de la corrida.** El tiempo
+  de restauración incluye el COMMIT de la fila de detección, que en este disco tarda unos 38 ms o
+  unos pocos milisegundos según el momento. En A, 30 de 250 restauraciones bajaron de 20 ms; en B2,
+  23 de 250; en B1, 120 de 250, casi todas en las primeras 24 repeticiones de cada caso. La mediana
+  de B1 (22,4 ms) queda entre los dos regímenes y no describe a ninguno. No hay evidencia de que la
+  baja se deba al código: B2, con el mismo commit, volvió a los valores de A, y el p95 es el mismo en
+  las tres.
+- Si se miran solo las restauraciones de 35 ms o más (el régimen del COMMIT lento), las medianas son
+  46,1 ms en A (214 valores), 46,1 ms en B1 (110) y 44,7 ms en B2 (215).
+- **El caso binario de 1 MB empeoró.** En ese mismo régimen su mediana pasó de 52,6 ms (A) a 55,2 ms
+  (B1) y 56,1 ms (B2), y el p95 de 56,1 a 57,3 y 62,1 ms. Es consistente con el cambio: la copia a
+  cuarentena ahora vuelve a calcular el hash de lo que copia. En los demás casos la diferencia es de
+  2 ms o menos, en los dos sentidos.
+- La detección, la ejecución de decisiones y los controles de COMMIT no muestran un cambio que se
+  distinga de la variación entre corridas. La alerta de B1 fue 16 ms más rápida y la de B2, 2,6 ms
+  más lenta que A.
+- Valores máximos: 396,4 ms en A (la pausa general ya comentada), 230,9 ms en B1 (binario,
+  repetición 15) y 65,9 ms en B2.
+- **Falsos positivos:** mismos resultados que en octubre. Con el filtro, 0 alertas espurias en 20
+  ediciones con vim y 20 con nano; sin el filtro, 20 de 40 (vim) y 40 de 60 (nano).
