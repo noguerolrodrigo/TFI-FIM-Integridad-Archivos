@@ -132,6 +132,10 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
   ejemplo, porque la base de datos se cayó en ese instante), al reiniciarse la vuelve a ejecutar.
   Restaurar o cerrar un caso dos veces no cambia nada; aceptar un cambio dos veces genera una versión
   de línea base de más.
+- **Restauración manual fuera del registro de decisiones.** El comando `restaurar.py` restaura y deja
+  constancia en el registro de eventos, pero no registra una decisión ni avisa a n8n (sección 4.7).
+  La alerta de ese evento sigue abierta, y si después alguien elige "Aceptar cambio" en ella, el
+  monitor reaplica el cambio que ya se había revertido a mano y lo pasa a la línea base.
 - **Ventanas que vencen.** Un cambio hecho dentro de una ventana de mantenimiento que no se pasó a la
   línea base vuelve a tratarse como no autorizado en el próximo evento o al reiniciar el monitor.
 

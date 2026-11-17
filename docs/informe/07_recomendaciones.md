@@ -58,8 +58,11 @@ un entorno productivo y las líneas de trabajo futuro que surgen de las limitaci
    ese descriptor (`dir_fd`), para eliminar el intervalo que hoy queda entre comprobar la carpeta y
    escribir. Con el mismo criterio, mover a cuarentena los archivos nuevos y leer la bóveda sin
    volver a abrir por nombre lo que ya se verificó.
-8. **Ampliar la evaluación.** Repetir las mediciones en un servidor con disco nativo, con directorios
+8. **Integrar la restauración manual con las decisiones.** Hacer que `restaurar.py` registre su
+   intervención como la decisión del evento, o que avise a n8n para que cierre la alerta, de modo
+   que una respuesta posterior en Telegram no reaplique un cambio que ya se revirtió a mano.
+9. **Ampliar la evaluación.** Repetir las mediciones en un servidor con disco nativo, con directorios
    de miles de archivos, con ráfagas de cambios simultáneos y con actualizaciones reales de paquetes,
    para medir las alertas espurias en un sistema en operación.
-9. **Probar los casos pendientes.** Verificar de punta a punta el aviso de 24 horas sin decisión y el
+10. **Probar los casos pendientes.** Verificar de punta a punta el aviso de 24 horas sin decisión y el
    funcionamiento con permisos de superusuario sobre directorios del sistema.
