@@ -1,5 +1,7 @@
 import time
+import contextlib
 import difflib
+import fcntl
 import os
 import stat
 import sys
@@ -42,6 +44,33 @@ avisados = {}
 # distintos: el candado hace que los archivos se procesen de a uno. Es reentrante porque ejecutar
 # una decisión de restaurar vuelve a pasar por procesar().
 candado = threading.RLock()
+
+# restaurar.py corre en otro proceso y también restaura: el candado de arriba no lo alcanza. Para
+# que el monitor no procese un archivo mientras el otro proceso está a mitad de una restauración
+# (y tome su temporal por un archivo nuevo), los dos piden además un candado del sistema operativo
+# (flock) sobre este archivo de la carpeta de logs.
+NOMBRE_CANDADO = "monitor.lock"
+_veces_tomado = 0
+
+@contextlib.contextmanager
+def exclusion():
+    """Un archivo a la vez: entre los hilos de este proceso y entre este proceso y restaurar.py."""
+    global _veces_tomado
+    with candado:
+        descriptor = None
+        if _veces_tomado == 0:
+            # Solo lo pide la entrada de más afuera: como el candado de hilos, es reentrante
+            carpeta = os.path.dirname(config.ARCHIVO_PENDIENTES)
+            os.makedirs(carpeta, exist_ok=True)
+            descriptor = os.open(os.path.join(carpeta, NOMBRE_CANDADO), os.O_RDONLY | os.O_CREAT, 0o644)
+            fcntl.flock(descriptor, fcntl.LOCK_EX)   # espera si lo tiene otro proceso
+        _veces_tomado += 1
+        try:
+            yield
+        finally:
+            _veces_tomado -= 1
+            if descriptor is not None:
+                os.close(descriptor)   # al cerrar el descriptor se suelta el candado
 
 # Decisiones humanas (las inserta n8n en la tabla decisiones; el monitor las ejecuta)
 INCIDENTE = "INCIDENTE"      # ya restaurado: fue un incidente, no se hace nada más
@@ -309,7 +338,7 @@ def procesar(ruta, movido_a=None, movido_desde=None, aprobado_por=None):
     aprobado_por lo pasa restaurar.py: es quien autorizó la restauración en modo aprobación.
     Devuelve qué pasó: SIN_CAMBIOS, RESTAURADO, PENDIENTE, NO_RESTAURADO, CREADO o SIN_VERIFICAR.
     """
-    with candado:
+    with exclusion():
         resultado, evento_id = _procesar(os.path.abspath(ruta), movido_a, movido_desde, aprobado_por)
 
     # El aviso sale después de responder: no suma tiempo a la detección ni a la restauración
@@ -527,7 +556,7 @@ def ejecutar_decision(d):
     """Ejecuta una decisión, deja constancia en ejecuciones y avisa a n8n para que confirme."""
     print(f"[*] Decisión #{d['id']}: {d['decision']} sobre el evento #{d['evento_id']} ({d['ruta']}), "
           f"de {d['decidido_por']} por {d['canal']}.")
-    with candado:
+    with exclusion():
         try:
             resultado, detalle = _ejecutar_decision(d)
         except Exception as e:
