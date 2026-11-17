@@ -1,6 +1,7 @@
 import time
 import difflib
 import os
+import stat
 import sys
 import threading
 import shutil  # NUEVO: Librería para mover archivos a cuarentena
@@ -88,15 +89,31 @@ def rutas_de_la_baseline():
     filas = bd.ejecutar("SELECT ruta_completa FROM baseline_vigente ORDER BY ruta_completa")
     return [fila[0] for fila in filas]
 
-def verificar(ruta, hash_actual, owner=None, permisos=None):
+def destino_de_enlace(ruta):
+    """Devuelve a dónde apunta la ruta si es un enlace simbólico, o None si no lo es.
+
+    Usa lstat, que mira la ruta en sí: open() y stat() siguen el enlace y verían el archivo de destino.
+    """
+    try:
+        if stat.S_ISLNK(os.lstat(ruta).st_mode):
+            return os.readlink(ruta)
+    except OSError:
+        pass
+    return None
+
+def verificar(ruta, hash_actual, owner=None, permisos=None, es_enlace=False):
     """Compara el estado actual del archivo (hash None si no está en disco) con la baseline vigente.
 
     Devuelve (estado, baseline). El estado es SIN_CAMBIOS, MODIFICADO, CREADO, ELIMINADO o PERMISOS.
+    Un enlace simbólico nunca coincide con la baseline, apunte a donde apunte: la baseline solo
+    tiene archivos comunes.
     """
     baseline = obtener_baseline(ruta)
     if baseline is None:
         # No figura en la baseline: si existe es un archivo nuevo; si no existe, no hay nada que mirar
-        return (SIN_CAMBIOS if hash_actual is None else CREADO), None
+        return (SIN_CAMBIOS if hash_actual is None and not es_enlace else CREADO), None
+    if es_enlace:
+        return MODIFICADO, baseline
     if hash_actual is None:
         return ELIMINADO, baseline
     if hash_actual != baseline["hash"]:
@@ -165,17 +182,19 @@ def log_to_db(nombre_archivo, ruta_completa, hash_sha256, evento, detalles_diff=
         print(f"[*] Evento guardado en {config.ARCHIVO_PENDIENTES}")
         return None
 
-def guardar_sin_verificar(nombre, ruta, hash_actual, error):
+def guardar_sin_verificar(nombre, ruta, hash_actual, error, destino_enlace=None):
     """Sin acceso a la baseline no se sabe si el cambio es legítimo: se guarda la evidencia y no se restaura."""
     respaldo = boveda.ruta_en_boveda(ruta)
     hash_boveda = get_sha256(respaldo)
 
     # Si el archivo es igual a su copia en la bóveda, lo más probable es que no haya cambiado
-    if hash_actual == hash_boveda:
+    if hash_actual == hash_boveda and destino_enlace is None:
         return
 
     ruta_cuarentena = None
-    if hash_actual is None:
+    if destino_enlace is not None:
+        texto_diff = f"En la ruta hay un enlace simbólico → {destino_enlace}."
+    elif hash_actual is None:
         texto_diff = "El archivo no está en disco."
     else:
         ruta_cuarentena = nueva_ruta_cuarentena(nombre)
@@ -251,7 +270,8 @@ def avisar_pendiente(ruta):
     print(f"    python restaurar.py '{ruta}'")
     print("-" * 50)
 
-def registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a=None):
+def registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a=None,
+                         destino_enlace=None):
     """Un cambio dentro de una ventana de mantenimiento: queda registrado con su evidencia, sin restaurar.
 
     Mientras el archivo siga igual, los eventos repetidos no generan otra fila.
@@ -263,7 +283,10 @@ def registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ven
     evento = MOVIDO if estado == ELIMINADO and movido_a else estado
     hash_baseline = baseline["hash"] if baseline else None
     detalle = f"Cambio autorizado por la ventana de mantenimiento #{ventana_id}: no se restaura."
-    if estado == MODIFICADO and boveda.tiene_respaldo(ruta):
+    if destino_enlace is not None:
+        # De un enlace se registra a dónde apunta; el destino no se lee ni se copia
+        detalle += f"\nEn la ruta hay un enlace simbólico → {destino_enlace}."
+    elif estado == MODIFICADO and boveda.tiene_respaldo(ruta):
         detalle += "\n" + calcular_diff(boveda.ruta_en_boveda(ruta), ruta)
 
     # La copia en cuarentena queda como registro de lo que se cambió (no se mueve el archivo)
@@ -302,10 +325,13 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     if es_ignorado(ruta):
         return SIN_CAMBIOS, None
 
-    # None si el archivo no está en disco
-    h = get_sha256(ruta)
+    # Un enlace simbólico no se sigue: no se le calcula hash ni se lee o copia su destino
+    destino_enlace = destino_de_enlace(ruta)
 
-    if h is None and os.path.lexists(ruta):
+    # None si el archivo no está en disco (o si es un enlace)
+    h = get_sha256(ruta) if destino_enlace is None else None
+
+    if h is None and destino_enlace is None and os.path.lexists(ruta):
         if os.path.isfile(ruta):
             print(f"[!] No se pudo leer {ruta}: no se puede verificar.")
         return SIN_VERIFICAR, None
@@ -314,11 +340,11 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
 
     # La verdad está en la baseline de la BD
     try:
-        estado, baseline = verificar(ruta, h, owner, permisos)
+        estado, baseline = verificar(ruta, h, owner, permisos, es_enlace=destino_enlace is not None)
     except Exception as e:
         print(f"[!] ALERTA: no se pudo consultar la baseline para verificar {nombre}: {e}")
         print("    Sin baseline no se restaura. Revisá que PostgreSQL esté levantado.")
-        guardar_sin_verificar(nombre, ruta, h, e)
+        guardar_sin_verificar(nombre, ruta, h, e, destino_enlace)
         return SIN_VERIFICAR, None
 
     if estado == SIN_CAMBIOS:
@@ -329,7 +355,8 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     if aprobado_por is None:
         ventana_id = ventana_que_autoriza(ruta)
         if ventana_id is not None:
-            return registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a)
+            return registrar_autorizado(nombre, ruta, h, owner, permisos, estado, baseline, ventana_id, movido_a,
+                                        destino_enlace)
 
     # En modo aprobación el archivo queda alterado hasta que alguien aprueba:
     # el mismo cambio se registra una sola vez
@@ -358,8 +385,12 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
     # La evidencia: qué pasó y, si se modificó el contenido, el Diff exacto
     if estado == CREADO:
         texto_diff = "Archivo que no está en la baseline vigente."
+        if destino_enlace is not None:
+            texto_diff += f" Es un enlace simbólico → {destino_enlace}."
         if movido_desde:
             texto_diff += f" Llegó movido desde {movido_desde}."
+    elif destino_enlace is not None:
+        texto_diff = f"El archivo de la baseline fue reemplazado por un enlace simbólico → {destino_enlace}."
     elif evento == MOVIDO:
         texto_diff = f"El archivo de la baseline fue movido a {movido_a}."
     elif estado == ELIMINADO:
@@ -388,7 +419,13 @@ def _procesar(ruta, movido_a, movido_desde, aprobado_por):
 
     resultado = NO_RESTAURADO
     try:
-        if estado == CREADO:
+        if estado == CREADO and destino_enlace is not None:
+            # Enlace que no está en la baseline: se quita el enlace (unlink no toca el destino).
+            # A dónde apuntaba ya quedó en el registro; no hay contenido propio que guardar.
+            os.unlink(ruta)
+            print(f"[+] AISLAMIENTO EXITOSO: Enlace simbólico fuera de la baseline eliminado (→ {destino_enlace})")
+            resultado = CREADO
+        elif estado == CREADO:
             # Archivo que no está en la baseline: se aísla y no hay nada que restaurar.
             # Es automático en los dos modos: es una contención y se puede deshacer.
             shutil.move(ruta, ruta_cuarentena)
