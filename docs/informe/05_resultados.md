@@ -274,8 +274,12 @@ controlado con dos editores.
 Los valores atípicos se mantuvieron en los datos. Los más relevantes son:
 
 - **Repetición 49 de la corrida principal.** En esa repetición se demoraron a la vez varias
-  operaciones independientes entre sí. De los 15 valores medidos en ella, cuatro son el máximo de su
-  caso en las 50 repeticiones (Tabla 5.10), y corresponden a dos subsistemas distintos: la
+  operaciones independientes entre sí. El CSV tiene 19 valores de esa repetición en los cinco casos;
+  15 son las mediciones que se informan en este capítulo y 4 son el control del tiempo hasta la fila
+  `RESTAURADO` (sección 3.3). De esos 15 valores, cuatro son el máximo de su caso en las 50
+  repeticiones (Tabla 5.10). El control del borrado, 401,2 ms, también es el máximo de su serie, lo
+  que es esperable porque acompaña a la restauración en disco de 396,4 ms. Los cuatro máximos
+  corresponden a dos subsistemas distintos: la
   restauración en disco, que depende del COMMIT de PostgreSQL y de la copia del archivo, y la
   entrega de la alerta, que depende de n8n. En cambio, las detecciones de esa misma repetición
   fueron normales (2,4 ms en el borrado y 2,8 ms en el archivo nuevo, ambas por debajo de la
