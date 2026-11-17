@@ -5,3 +5,9 @@ cuarentena/
 boveda/
 .pytest_cache/
 logs/
+
+# Vistas previas del informe en PDF y fotos originales de las capturas (muestran la firma de los
+# enlaces sin tapar): no se versionan
+docs/informe/vista_previa_*.pdf
+docs/informe/img/celular_alerta_parte1.jpg
+docs/informe/img/celular_botones_decision.jpg
