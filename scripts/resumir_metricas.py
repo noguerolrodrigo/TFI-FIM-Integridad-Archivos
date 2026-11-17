@@ -97,10 +97,14 @@ def graficar(grupos, archivo_png):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    import matplotlib.ticker
 
     superficie, tinta, tinta_suave, grilla, serie = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df", "#2a78d6"
 
     # Un panel por métrica, cada uno con su propia escala (nunca dos escalas en un mismo eje).
+    # La escala es logarítmica: con escala lineal, un solo valor atípico (por ejemplo 396 ms en una
+    # serie con mediana de 45 ms) estiraba el eje y aplastaba el resto de la distribución. Los
+    # atípicos se siguen dibujando y el mayor de cada fila se anota con su valor.
     # La restauración en disco y el aislamiento del archivo nuevo van en el mismo panel: las dos
     # miden cuándo el disco quedó otra vez como en la baseline.
     paneles = [
@@ -143,9 +147,18 @@ def graficar(grupos, archivo_png):
             fin_bigote = max(v for v in valores if v <= q3 + 1.5 * (q3 - q1))
             eje.annotate(f"mediana {mediana:.1f} ms", (fin_bigote, posicion), xytext=(6, 7),
                          textcoords="offset points", va="center", fontsize=8, color=tinta_suave)
+            # El valor más alto se anota si es un atípico lejano (más del triple del p95)
+            maximo = max(valores)
+            if maximo > 3 * percentil(valores, 95):
+                eje.annotate(f"atípico: {maximo:.1f} ms", (maximo, posicion), xytext=(0, -9),
+                             textcoords="offset points", ha="center", va="center", fontsize=7,
+                             color=tinta_suave)
         eje.set_yticks(list(posiciones), [n for n, _ in datos], fontsize=9, color=tinta)
         eje.set_title(titulo, loc="left", fontsize=10, color=tinta, pad=6)
-        eje.set_xlabel("milisegundos", fontsize=8, color=tinta_suave)
+        eje.set_xscale("log")
+        eje.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda x, _: f"{x:g}"))
+        eje.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+        eje.set_xlabel("milisegundos (escala logarítmica)", fontsize=8, color=tinta_suave)
         eje.tick_params(axis="x", labelsize=8, colors=tinta_suave)
         eje.tick_params(axis="y", length=0)
         eje.grid(axis="x", color=grilla, linewidth=0.8)
@@ -153,8 +166,8 @@ def graficar(grupos, archivo_png):
         for lado in ("top", "right", "left"):
             eje.spines[lado].set_visible(False)
         eje.spines["bottom"].set_color(grilla)
-        # Lugar a la derecha para la etiqueta de la mediana
-        eje.set_xlim(0, max(max(v) for _, v in datos) * 1.4)
+        # Lugar a la derecha para las etiquetas (en escala logarítmica, un factor y no una suma)
+        eje.set_xlim(min(min(v) for _, v in datos) * 0.7, max(max(v) for _, v in datos) * 2.5)
         eje.set_ylim(0.4, len(datos) + 0.6)
     fig.tight_layout()
     fig.savefig(archivo_png, dpi=200, facecolor=superficie)

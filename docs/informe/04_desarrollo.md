@@ -460,7 +460,8 @@ modificado (`config_test.txt`), la fecha y hora, los hashes anterior y nuevo, la
 en cuarentena, el historial del archivo, que el monitor ya lo restauró desde la bóveda y el diff con
 la línea agregada. Debajo aparecen los enlaces locales de respaldo y los botones "Fue un incidente" y
 "Era un cambio autorizado". El último mensaje es la confirmación de n8n: "Decisión EJECUTADA:
-INCIDENTE sobre config_test.txt (evento #43)", tomada por telegram.
+INCIDENTE sobre config_test.txt (evento #43)", tomada por telegram. La firma de los enlaces locales
+se ocultó en la captura.
 
 La Figura 4.3 muestra el mismo mensaje en el teléfono desde el que se tomó la decisión.
 
@@ -471,7 +472,7 @@ mensaje: archivo, fecha y hora del evento, hashes, ubicación en cuarentena, his
 diff. A la derecha, la parte inferior: los enlaces locales de respaldo, los botones de decisión y la
 confirmación "Decisión EJECUTADA: INCIDENTE sobre config_test.txt (evento #43)". Las capturas se
 recortaron para quitar la barra de estado del teléfono, cuya hora corresponde al momento de la
-captura y no al del evento.
+captura y no al del evento, y se ocultó la firma de los enlaces locales.
 
 ## 4.8 Configuración y puesta en marcha
 

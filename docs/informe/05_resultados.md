@@ -311,7 +311,9 @@ La Figura 5.1 resume la distribución de las mediciones de la corrida principal.
 
 **Figura 5.1.** Distribución por caso del tiempo hasta la detección, la restauración en disco, la
 latencia de alerta (Telegram simulado) y la ejecución de decisiones. Cada punto es una repetición;
-las cajas indican el rango intercuartil y la mediana. Cada panel tiene su propia escala. Fuente:
+las cajas indican el rango intercuartil y la mediana. Cada panel tiene su propia escala, que es
+logarítmica para que un valor atípico no comprima el resto de la distribución; el mayor atípico de
+cada fila se anota con su valor cuando supera el triple del p95. Fuente:
 `resultados/grafico_20261015_232407.png`.
 
 ## 5.9 Efecto de las correcciones de la segunda instancia
