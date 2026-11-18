@@ -76,9 +76,7 @@ excluidos del repositorio (`.gitignore`).
 ## Anexo C: Configuración (`.env.example`)
 
 El sistema se configura con un archivo `.env` que se crea a partir de esta plantilla. La plantilla no
-contiene credenciales: la contraseña es un valor de ejemplo y los secretos están vacíos. El ejemplo
-con `/etc` que trae la plantilla es anterior a la limitación de los enlaces simbólicos: hoy vale lo
-indicado en la sección 7.1.
+contiene credenciales: la contraseña es un valor de ejemplo y los secretos están vacíos.
 
 ```ini
 # Copiar a .env y completar. El .env real no se sube al repositorio.
@@ -90,7 +88,8 @@ DB_USER=fim_user
 DB_PASS=cambiar_esta_clave
 
 # Directorios a vigilar, separados por ":". Las rutas relativas se toman desde la carpeta del proyecto.
-# Ejemplo con rutas reales (requiere correr como root): RUTAS_MONITOREADAS=/etc:/usr/bin
+# Ejemplo con dos directorios: RUTAS_MONITOREADAS=./directorio_prueba:./otra_carpeta_de_prueba
+# No apuntar a directorios con enlaces simbólicos legítimos, como /etc (informe, secciones 6.4 y 7.1).
 RUTAS_MONITOREADAS=./directorio_prueba
 
 # Dónde se guardan la copia confiable, la evidencia y el log local.

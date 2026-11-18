@@ -142,6 +142,21 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   definición normativa de MTTD/MTTR ni *human-in-the-loop*: no citarlas.
 - `docs/informe/vista_previa_*.pdf` y las fotos `celular_*.jpg` están en `.gitignore`. No usar
   `git add -A` sobre carpetas: agregar los archivos por nombre.
+- **Revisión final del autor (18/11/2026).** Lectura completa del PDF con 27 dudas, verificadas contra
+  el código de `39c661c` y los CSV, sin cambiar código de la aplicación ni medir nada nuevo. Commits
+  `9ef2684` (contradicciones), `716131d` (qué se midió), `e7c40b2` (límites del diseño) y `c9ef312`
+  (Tabla I.3 del Anexo I y páginas). Después se cambió solo el comentario de ejemplo de
+  `.env.example` (ya no sugiere `/etc:/usr/bin`). El informe tiene 92 páginas y 30 referencias.
+- Aclaraciones de medición que quedaron en el informe: "tiempo real" es operativo (por eventos, sin
+  umbral previo); `t0` es posterior al evento del kernel (MTTD algo subestimado, sin cota); la marca
+  de detección es el inicio de la transacción, no el COMMIT; la alerta se mide hasta que la API de
+  Telegram acepta el mensaje; el umbral de 35 ms de 5.9 es descriptivo; el Resumen usa octubre y 6.1
+  agrega B2 entre paréntesis.
+- El documento de diseño de playbooks (`docs/Orquestación ... con n8n.docx`) es material de cátedra:
+  se cita por título, sin autores (decisión de Rodrigo), aclarando que el archivo trae su nombre en
+  el encabezado junto a un coautor sin completar. No va en la declaración de IA.
+- Material de estudio para la defensa, fuera del repo: `preguntas_y_respuestas.md` en el Escritorio
+  de Windows. El PDF de entrega se copia a `TFI_Noguerol_2026_segunda_instancia.pdf` en el mismo lugar.
 
 ## CÓDIGO CONGELADO (desde el 16/10/2026; reabierto solo para M2 y m8, cerrado en `39c661c`)
 - No se agregan funcionalidades. Solo se aceptan arreglos de errores, cada uno en su commit, con
@@ -170,6 +185,27 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   su lugar original y los movidos van a cuarentena, pero la carpeta nueva queda vacía en el
   directorio vigilado: el monitor no borra directorios. Un enlace a directorio que estuviera dentro
   de la carpeta movida recién se ve en el próximo escaneo inicial.
+- **Línea base falsificable con `fim_user`.** Esa cuenta puede insertar filas `BASELINE` y la vigente
+  es la versión más alta: quien la obtenga (la clave está en el `.env`) inserta una versión con
+  hashes maliciosos y el monitor no ve cambios. Las filas quedan en el registro, pero nada avisa.
+- **Sin atribución.** No se registra qué usuario o proceso hizo el cambio (inotify no lo informa).
+- **Enlaces duros desde afuera.** Una escritura por un enlace duro externo no genera evento: se ve
+  con el próximo evento sobre la ruta vigilada o en el escaneo inicial (probado el 18/11/2026).
+- **Directorios nuevos.** Un directorio vacío nuevo no deja registro. Los archivos de subdirectorios
+  recién creados se detectan, pero un directorio traído desde afuera con `mv` queda sin vigilar.
+- **Desborde de la cola de inotify.** watchdog 6.0.0 descarta `IN_Q_OVERFLOW`: el monitor no se
+  entera de los eventos perdidos. No se probó.
+- **Bóveda alterada anula la restauración.** Si no coincide con la baseline no se restaura; la alerta
+  llega como `NO_RESTAURADO`, con hashes y cuarentena pero sin diff.
+- **Archivos nuevos legítimos.** Van a cuarentena en los dos modos; el camino previsto es una ventana
+  de mantenimiento. Fuera de ella puede fallar el servicio que los creó.
+- **Diff sin enmascarar.** El diff va a la BD y a Telegram tal cual: puede llevar claves o tokens.
+- **Motivo de una respuesta fallida.** El `except` final de `_procesar_abierto()` solo imprime el
+  error; no queda en la BD ni en el log local.
+- **Alertas repetidas en modo aprobación.** Se evitan con `avisados`, en memoria: al reiniciar, el
+  escaneo inicial vuelve a avisar lo pendiente.
+- **`restaurar.py` y "Aceptar cambio".** No registra decisión ni avisa a n8n: un "Aceptar" posterior
+  reaplica lo ya revertido. Detectado en la segunda instancia con el código cerrado.
 - **Temporales ignorados.** Un archivo malicioso cuyo nombre coincida con `PATRONES_IGNORADOS`
   (por ejemplo `algo.tmp`) no se detecta. Es el costo de bajar los falsos positivos.
 - **BD caída.** Sin acceso a la baseline no se restaura: se guarda la evidencia y el evento queda
