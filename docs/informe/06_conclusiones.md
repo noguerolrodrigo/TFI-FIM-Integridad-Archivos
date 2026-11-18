@@ -100,6 +100,20 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
   aprobación, cuando la persona lo decide). Esto impide vigilar tal como está un directorio que
   contenga enlaces legítimos. Es el caso de `/etc`: en el equipo de pruebas, el comando
   `find /etc -type l | wc -l` contó 765 enlaces, entre ellos `/etc/resolv.conf` y `/etc/mtab`.
+- **Enlaces duros desde fuera del directorio.** inotify no genera eventos cuando un archivo se modifica
+  a través de un nombre que está fuera del directorio vigilado (The Linux man-pages project, 2026b).
+  Se comprobó con el monitor: una escritura hecha por un enlace duro externo no se detectó hasta
+  que hubo otro evento sobre la ruta vigilada; sin ese evento, se detecta en el siguiente escaneo
+  inicial.
+- **Directorios nuevos.** Solo se registran archivos: un directorio nuevo y vacío no deja registro.
+  En la misma comprobación se detectaron los 80 archivos creados dentro de subdirectorios recién
+  creados, pero un directorio traído desde fuera con un movimiento quedó sin vigilar: se aisló el
+  archivo que traía y no se detectó otro creado después dentro de él.
+- **Desborde de la cola de inotify.** Si llegan más eventos de los que admite la cola del kernel
+  (16.384 en el equipo de pruebas), los que sobran se descartan y el kernel lo avisa con el evento
+  `IN_Q_OVERFLOW` (The Linux man-pages project, 2026b). La versión de watchdog utilizada descarta
+  ese aviso, de modo que el monitor no se entera: los cambios perdidos se detectan recién con otro
+  evento sobre el mismo archivo o en el siguiente escaneo inicial. Este caso no se probó.
 - **Sin atribución del cambio.** El registro guarda qué cambió y cuándo, no qué usuario o proceso lo
   hizo: inotify no entrega ese dato (The Linux man-pages project, 2026b). El propietario que se
   registra es el del archivo, no el autor del cambio; atribuirlo requeriría el subsistema de
@@ -124,7 +138,10 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
 
 - **Bóveda en el mismo equipo.** La copia confiable está en el mismo disco y pertenece al mismo usuario
   que los archivos vigilados. Verificar su hash contra la base de datos antes de restaurar impide
-  restaurar una copia alterada, pero no impide que la alteren. La verificación y la copia abren el
+  restaurar una copia alterada, pero no impide que la alteren. Quien pueda escribir en la bóveda
+  puede, entonces, anular la restauración: el archivo queda alterado y la persona recibe la alerta
+  con el aviso de que no se pudo restaurar y requiere revisión manual, con los hashes y la copia en
+  cuarentena pero sin diff, porque el diff se calcula contra la bóveda. La verificación y la copia abren el
   archivo de la bóveda por separado, igual que ocurre con la copia de cuarentena al aceptar un cambio:
   quien pueda escribir en esas carpetas podría cambiar el archivo entre una y otra.
 - **Intervalo entre comprobar la carpeta y escribir.** Antes de restaurar se comprueba que la carpeta
@@ -136,6 +153,11 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
 - **Lecturas por nombre que quedan.** El hash de la fila `RESTAURADO` y los permisos que acompañan a
   cada evento se leen por el nombre del archivo después de responder, y el generador de línea base
   comprueba que la ruta no sea un enlace y después la lee por su nombre.
+- **Archivos nuevos legítimos.** Un archivo que no figura en la línea base se mueve a cuarentena en los
+  dos modos, aunque lo haya creado un servicio legítimo. El camino previsto es abrir antes una
+  ventana de mantenimiento y pasar el archivo a la línea base; fuera de una ventana, el servicio que
+  lo creó puede fallar hasta que una persona responda "Era un cambio autorizado" y el monitor lo
+  reponga.
 - **Propietario.** Reponer el propietario de un archivo requiere ejecutar el monitor como superusuario;
   sin esos permisos, el cambio se registra pero no se repone.
 - **Base de datos caída.** Sin acceso a la línea base no se restaura: se guarda la evidencia y el evento
@@ -148,7 +170,9 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
 - **Restauración manual fuera del registro de decisiones.** El comando `restaurar.py` restaura y deja
   constancia en el registro de eventos, pero no registra una decisión ni avisa a n8n (sección 4.7).
   La alerta de ese evento sigue abierta, y si después alguien elige "Aceptar cambio" en ella, el
-  monitor reaplica el cambio que ya se había revertido a mano y lo pasa a la línea base.
+  monitor reaplica el cambio que ya se había revertido a mano y lo pasa a la línea base. Se detectó
+  en la segunda instancia, al revisar el hallazgo m1, con el código reabierto solo para M2 y m8: por
+  eso se declara en lugar de corregirse.
 - **Ventanas que vencen.** Un cambio hecho dentro de una ventana de mantenimiento que no se pasó a la
   línea base vuelve a tratarse como no autorizado en el próximo evento o al reiniciar el monitor.
 
@@ -156,6 +180,19 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
 
 - **Inmutabilidad relativa.** El registro es de solo-agregar para las cuentas de la aplicación, no para
   el superusuario de PostgreSQL.
+- **Línea base falsificable con la cuenta del monitor.** `fim_user` puede insertar filas en
+  `registros_archivos`, y la línea base vigente es la de versión más alta. Quien obtenga esa cuenta
+  (su contraseña está en el archivo `.env` del equipo vigilado) puede insertar una versión nueva con
+  los hashes de archivos ya alterados, y el monitor los vería sin cambios. Las filas falsas quedan en
+  el registro, porque esa cuenta no puede borrarlas, pero nada alerta de su aparición. Es el punto
+  débil que señalan Salman et al. (2022): quien puede editar la base de referencia evade el control.
+- **Datos sensibles en la alerta.** El diff se guarda en la base de datos y se envía a Telegram tal
+  cual, recortado pero sin enmascarar: si la línea cambiada contiene una contraseña o un token, ese
+  dato viaja a un servicio externo y queda en el historial del chat.
+- **Motivo de una respuesta fallida.** Si la copia a cuarentena o la restauración fallan con un error,
+  el evento ya quedó registrado y la alerta informa que no se pudo restaurar, pero el motivo del
+  error solo se imprime en la salida del monitor: no se guarda en la base de datos ni en el registro
+  local.
 - **Normalización de rutas en ngrok.** Las reglas del túnel se evalúan sobre la ruta normalizada, pero
   ngrok reenvía la ruta original, por lo que algunas variantes codificadas de la ruta permitida
   atraviesan el filtro. Se verificó que no exponen datos: n8n las rechaza o devuelve una página vacía

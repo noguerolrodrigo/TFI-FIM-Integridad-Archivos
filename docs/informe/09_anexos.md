@@ -199,7 +199,8 @@ class FIMEventHandler(FileSystemEventHandler):
 El orden es: comprobar la carpeta, abrir el archivo una sola vez sin seguir enlaces, verificar,
 registrar la evidencia en la base de datos, copiarla a cuarentena y, recién después, restaurar. Solo
 se restaura si la copia de la bóveda sigue teniendo el hash de la línea base y la carpeta real sigue
-dentro del directorio vigilado.
+dentro del directorio vigilado. El `except` final solo imprime el motivo de la falla: no lo guarda
+(sección 6.4).
 
 ```python
 def _procesar(ruta, movido_a, movido_desde, aprobado_por):

@@ -293,7 +293,12 @@ los cambios legítimos de un administrador. Para equilibrarlo se implementaron d
   porque el aislamiento es una contención reversible. Un enlace simbólico nuevo es la excepción: no
   se puede mover a cuarentena como un archivo, la respuesta es eliminarlo y eso no se deshace solo,
   así que en modo `aprobacion` queda en su lugar hasta que una persona decide. "Restaurar" lo
-  elimina; "Aceptar" se rechaza, porque la línea base no admite enlaces.
+  elimina; "Aceptar" se rechaza, porque la línea base no admite enlaces. Como en este modo el
+  archivo queda alterado, cada evento posterior volvería a encontrarlo distinto de la línea base:
+  para no repetir la alerta, el monitor recuerda en memoria el último estado avisado de cada ruta
+  (tipo de cambio, hash, permisos y propietario) y solo registra un evento nuevo si ese estado
+  cambia; lo mismo vale dentro de una ventana de mantenimiento. Esa memoria se pierde al reiniciar
+  el monitor, y el escaneo inicial vuelve a registrar y avisar los cambios que sigan pendientes.
 - **Ventanas de mantenimiento.** Antes de responder, el monitor consulta si hay una ventana vigente
   que cubra la ruta del archivo. Si la hay, registra el cambio con su diff y una copia en cuarentena,
   pero no lo restaura. Si las ventanas no se pueden consultar, se considera que no hay autorización y

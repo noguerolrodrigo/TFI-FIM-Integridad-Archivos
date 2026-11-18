@@ -33,6 +33,11 @@ un entorno productivo y las líneas de trabajo futuro que surgen de las limitaci
 6. **Reducir la dependencia del plan gratuito de ngrok.** Para un uso continuo, conviene evaluar un
    dominio propio con un proxy inverso y certificado TLS, en el que las reglas de filtrado se apliquen
    sobre la ruta tal como llega. Mientras tanto, el enlace local sigue disponible como respaldo.
+7. **No enviar contenido sensible por Telegram.** En directorios con credenciales, enviar en la alerta
+   solo el archivo y los hashes y dejar el diff en la base de datos, o enmascarar antes las líneas
+   que parezcan contraseñas o tokens. La versión actual no enmascara nada (sección 6.4).
+8. **Crear archivos solo dentro de una ventana de mantenimiento.** Fuera de una ventana, un archivo
+   nuevo legítimo va a cuarentena y el servicio que lo creó puede fallar (sección 6.4).
 
 ## 7.2 Trabajo futuro
 
@@ -66,3 +71,12 @@ un entorno productivo y las líneas de trabajo futuro que surgen de las limitaci
    para medir las alertas espurias en un sistema en operación.
 10. **Probar los casos pendientes.** Verificar de punta a punta el aviso de 24 horas sin decisión y el
    funcionamiento con permisos de superusuario sobre directorios del sistema.
+11. **Proteger la línea base de la cuenta del monitor.** Separar en otra cuenta la inserción de filas
+   `BASELINE`, que hoy el monitor necesita para aceptar cambios, y alertar cuando aparece una versión
+   de línea base que no corresponde a una decisión registrada.
+12. **Agregar un escaneo periódico complementario.** Repetir cada cierto tiempo la verificación que hoy
+   se hace solo al arrancar, para cubrir lo que los eventos no muestran: desbordes de la cola de
+   inotify, escrituras por enlaces duros externos y directorios traídos desde fuera.
+13. **Guardar el motivo de las respuestas fallidas y atribuir los cambios.** Registrar el error junto al
+   evento cuando la respuesta falla, y evaluar el subsistema de auditoría o eBPF para saber qué
+   usuario o proceso hizo cada cambio.
