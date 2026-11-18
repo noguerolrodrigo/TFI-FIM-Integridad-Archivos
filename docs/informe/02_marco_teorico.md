@@ -11,7 +11,9 @@ arte: los antecedentes, una comparación de las herramientas existentes y el apo
 La seguridad de la información engloba las prácticas y tecnologías destinadas a proteger los activos
 digitales contra accesos o alteraciones no autorizadas. Se organiza en torno a tres propiedades,
 conocidas como tríada CIA: confidencialidad, integridad y disponibilidad (Bishop, 2003). Este trabajo se centra en la **integridad**, que busca que la información no sea modificada de
-forma ilegítima y que cualquier alteración sea detectable y atribuible.
+forma ilegítima y que cualquier alteración sea detectable. El sistema de este trabajo registra qué
+cambió y cuándo, pero no quién lo hizo: inotify no informa el usuario ni el proceso que originó el
+evento (The Linux man-pages project, 2026b), limitación que se retoma en el Capítulo 6.
 
 ## 2.2 Funciones hash criptográficas (SHA-256)
 
@@ -228,18 +230,20 @@ componentes.
 | auditd (Red Hat, 2021, 2023) | Reglas del subsistema de auditoría del kernel sobre accesos a archivos y directorios (lectura, escritura, ejecución, atributos) | Registra los accesos y permite informarlos por usuario; las páginas no mencionan contenido ni hashes | — | — | Reglas con `auditctl`; revisión con `ausearch` y `aureport` |
 | fanotify (The Linux man-pages project, 2026a) | Interfaz del kernel de notificación e intercepción de eventos del sistema de archivos | — (es una interfaz, no una herramienta) | Los eventos de permiso permiten autorizar o denegar un acceso | — | Requiere programar contra la interfaz |
 | Enfoques con eBPF (eBPF.io, s.f.; Tetragon, s.f.) | Programas en el kernel; Tetragon observa el acceso a archivos con ganchos y filtra en el kernel | Proceso que accedió y operación; no el contenido | — | — | Privilegios para cargar programas eBPF |
-| Este trabajo | Eventos de inotify como disparador y comparación con una línea base en PostgreSQL; escaneo al arrancar | Hashes anterior y nuevo, copia del archivo y diff de texto | Restauración desde una copia verificada, cuarentena, modo de aprobación y ventanas de mantenimiento | n8n y Telegram: la persona decide desde la alerta y el monitor ejecuta | Un equipo: Python, PostgreSQL y n8n |
+| Este trabajo | Eventos de inotify como disparador y comparación con una línea base en PostgreSQL; escaneo al arrancar | Hashes anterior y nuevo, copia del archivo y diff de texto | Restauración desde una copia verificada, cuarentena, modo de aprobación y ventanas de mantenimiento | n8n y Telegram: la persona decide desde la alerta y el monitor ejecuta | Un equipo con Python, PostgreSQL y n8n (sobre Node.js); para las alertas y los botones, una cuenta de Telegram y un túnel ngrok, que son servicios externos |
 
 ### Brecha y aporte
 
 De la comparación surge que la detección en tiempo real y el diff de archivos de texto no son
 novedades: OSSEC y Wazuh los ofrecen, y Wazuh agrega una respuesta activa basada en scripts. También
 la norma contempla revertir los cambios de forma automática (SI-7(5)). Lo que la documentación
-consultada no describe como un conjunto ya resuelto en una herramienta liviana, de un solo equipo,
-es la combinación de tres cosas: la restauración automática desde una copia verificada contra la
+consultada no describe como un conjunto ya resuelto en una herramienta que se instala en un solo
+equipo, sin agentes ni servidor central, es la combinación de tres cosas: la restauración automática desde una copia verificada contra la
 línea base, la decisión de una persona tomada desde la propia alerta (confirmar el incidente,
 restaurar o aceptar el cambio) con efecto sobre la línea base, y el registro de solo-agregar de todo
 el recorrido. Las plataformas que más se acercan lo hacen con una arquitectura de agente y servidor.
+No se afirma que este sistema consuma menos recursos que ellas: requiere cinco componentes (Python,
+PostgreSQL, n8n sobre Node.js, ngrok y Telegram) y su consumo no se midió ni se comparó.
 
 El aporte de este trabajo es, entonces, de integración y de medición, no un algoritmo nuevo: reúne
 mecanismos conocidos (inotify, hashes, diff, restauración atómica, orquestación con aprobación

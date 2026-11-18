@@ -229,9 +229,9 @@ kernel en el momento del cambio.
 
 ## 5.7 Comparación con la tabla del documento de diseño
 
-El documento de diseño de la etapa de orquestación ("Orquestación de Playbooks para Monitoreo de
-Integridad de Archivos (FIM) con n8n") incluía una tabla de resultados que, según el propio
-documento, era simulada: sus valores fueron supuestos y no medidos. Se reproduce junto a los valores
+El documento de diseño de la etapa de orquestación, material entregado por la cátedra
+(*Orquestación de Playbooks*, s.f.; sección 3.6), incluía una tabla de resultados que, según el
+propio documento, era simulada: sus valores fueron supuestos y no medidos. Se reproduce junto a los valores
 medidos en este trabajo únicamente para dejar en claro la diferencia entre ambos.
 
 **Tabla 5.9.** Valores supuestos en el documento de diseño frente a valores medidos.
@@ -296,7 +296,8 @@ Además, deben tenerse en cuenta las siguientes amenazas a la validez de los res
 - **Entorno:** las mediciones se hicieron en una sola notebook con WSL2. El MTTR está dominado por el
   COMMIT de PostgreSQL en el disco virtual (sección 5.2), por lo que los tiempos absolutos de
   restauración no son extrapolables a un servidor con otro almacenamiento.
-- **Escala:** el directorio vigilado contenía pocos archivos y los cambios se hicieron de a uno. No se
+- **Escala:** el directorio vigilado contenía cinco archivos en la corrida principal y dos en la de
+  editores, y los cambios se hicieron de a uno. No se
   evaluaron ráfagas de cambios simultáneos ni directorios con miles de archivos.
 - **Telegram:** la latencia de alerta real se midió con solo diez repeticiones y depende de la red y
   de un servicio externo.

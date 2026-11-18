@@ -33,7 +33,7 @@ para qué las usé, qué hice yo y cómo verifiqué lo que generaron.
   paso antes de que se implementara, con un commit por cambio.
 - Tomé las decisiones de diseño: Telegram como canal de alerta; los botones de decisión a través de
   un túnel ngrok; medir la latencia con el bot real además del simulado; combinar el modo automático
-  con el modo de aprobación; descartar un antecedente que no podía respaldar; y no afirmar
+  con el modo de aprobación; quitar las referencias que no se pudieron verificar; y no afirmar
   condiciones de red que no había verificado.
 - Hice las tareas manuales: instalar y levantar PostgreSQL y n8n, ejecutar las migraciones, crear el
   bot con BotFather, configurar ngrok, probar las alertas y los botones desde mi teléfono, y cada
@@ -41,8 +41,8 @@ para qué las usé, qué hice yo y cómo verifiqué lo que generaron.
 
 ### Cómo verifiqué lo generado
 
-- Ejecuté la batería de pruebas automatizadas en mi equipo.
-- Ejecuté las mediciones en mi entorno, y los CSV quedaron versionados. Ningún número del informe
+- La batería de pruebas automatizadas se ejecutó en mi equipo y revisé sus resultados.
+- Las mediciones se ejecutaron en mi equipo y revisé sus resultados; los CSV quedaron versionados. Ningún número del informe
   proviene de la herramienta sin un dato medido que lo respalde.
 - Hice pruebas manuales de extremo a extremo: evento, alerta en el teléfono, decisión y
   restauración.

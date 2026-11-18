@@ -35,7 +35,7 @@ una única notebook con WSL2 y sus límites se discuten en la sección 6.4.
 |---|---|---|
 | 1. Base de datos con línea base e historial de solo-agregar | Cumplido. Línea base versionada y tablas de solo-agregar. Las cuentas de la aplicación no pueden modificar ni borrar lo registrado; esto no alcanza al superusuario de PostgreSQL. | Cap. 4 (4.3 y 4.5) |
 | 2. Generador de línea base con copia confiable | Cumplido. Registra hash, permisos y propietario de cada archivo, y lo copia a la bóveda. | Cap. 4 (4.3) |
-| 3. Monitor por eventos con todos los tipos de cambio | Cumplido. Detecta modificaciones, creaciones, borrados, movimientos y cambios de permisos y de propietario. | Cap. 4 (4.4); Cap. 5 (5.2) |
+| 3. Monitor por eventos con todos los tipos de cambio | Cumplido para archivos comunes: detecta modificaciones, creaciones, borrados, movimientos y cambios de permisos y de propietario. Salvedad: los enlaces simbólicos no se soportan; el monitor los trata como no autorizados y los elimina (6.4). | Cap. 4 (4.4); Cap. 5 (5.2) |
 | 4. Evidencia diferencial registrada con el evento | Cumplido, con una limitación en escrituras en varios pasos (6.4). | Cap. 4 (4.4) |
 | 5. Respuesta automática o sujeta a aprobación | Cumplido. Restauración automática o con aprobación, cuarentena y ventanas de mantenimiento. Reponer el propietario requiere superusuario. | Cap. 4 (4.4) |
 | 6. Notificación y decisión humana desde la alerta | Cumplido. Alerta por Telegram con botones y enlaces locales de respaldo, probada con el bot real. | Cap. 4 (4.6 y 4.7) |
@@ -69,8 +69,9 @@ distinguibles en las métricas, salvo en el archivo binario de 1 MB, cuya restau
 
 **Separar decidir de ejecutar simplificó la seguridad.** Como n8n solo registra decisiones y el monitor
 es el único componente que modifica archivos, no fue necesario habilitar en n8n la ejecución de
-comandos, cada componente usa una cuenta de base de datos con permisos mínimos, y desde internet solo
-es alcanzable una ruta. El costo es que la decisión se aplica cuando el monitor consulta la base de
+comandos, cada componente usa una cuenta de base de datos con permisos mínimos, y la política del
+túnel admite una sola ruta desde internet, con la salvedad de las variantes codificadas que
+atraviesan el filtro sin exponer datos (sección 6.4). El costo es que la decisión se aplica cuando el monitor consulta la base de
 datos, cada 2 s.
 
 **Medir mostró problemas que la prueba manual no revelaba.** La corrida de prueba reveló dos cosas que
@@ -97,6 +98,10 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
   aprobación, cuando la persona lo decide). Esto impide vigilar tal como está un directorio que
   contenga enlaces legítimos. Es el caso de `/etc`: en el equipo de pruebas, el comando
   `find /etc -type l | wc -l` contó 765 enlaces, entre ellos `/etc/resolv.conf` y `/etc/mtab`.
+- **Sin atribución del cambio.** El registro guarda qué cambió y cuándo, no qué usuario o proceso lo
+  hizo: inotify no entrega ese dato (The Linux man-pages project, 2026b). El propietario que se
+  registra es el del archivo, no el autor del cambio; atribuirlo requeriría el subsistema de
+  auditoría o eBPF, como hace Wazuh con *who-data* (Tabla 2.1).
 - **Archivo nuevo movido por nombre.** Un archivo que no figura en la línea base se mueve a
   cuarentena por su nombre, porque un renombrado no se puede hacer sobre un descriptor. El movimiento
   no sigue enlaces, pero si el archivo se reemplaza entre el cálculo del hash y el movimiento, lo que
@@ -165,7 +170,8 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
 
 - **Un único entorno.** Las mediciones se hicieron en una notebook con WSL2. Los tiempos de restauración
   dependen del almacenamiento y no son extrapolables a un servidor con disco nativo.
-- **Escala.** El directorio vigilado tenía pocos archivos y los cambios se aplicaron de a uno. No se
+- **Escala.** El directorio vigilado tenía cinco archivos (dos en la corrida de editores) y los cambios
+  se aplicaron de a uno. No se
   evaluaron directorios con miles de archivos ni ráfagas de cambios simultáneos.
 - **Alertas espurias.** Se midieron con dos editores en un caso controlado, no en un sistema en
   operación con actualizaciones de paquetes y otros procesos.
@@ -179,7 +185,7 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
 ## 6.5 Consideraciones finales
 
 El sistema desarrollado no reemplaza a una plataforma de seguridad de propósito general, pero muestra
-que un monitor de integridad liviano, construido con componentes de uso extendido, puede detectar un
+que un monitor de integridad de un solo equipo, construido con componentes de uso extendido, puede detectar un
 cambio en milisegundos, conservar la evidencia de qué cambió, restaurar el archivo y dejar en manos de
 una persona, desde su teléfono, la decisión sobre si el cambio era legítimo. Las mediciones permiten
 afirmarlo con números propios, obtenidos en un entorno acotado y con sus limitaciones a la vista.

@@ -345,7 +345,8 @@ verifican con pruebas automatizadas que consultan el catálogo de PostgreSQL.
 
 ## 4.6 Orquestación con n8n
 
-La etapa de orquestación se basó en el documento de diseño de playbooks, con un ajuste de
+La etapa de orquestación se basó en el documento de diseño de playbooks entregado por la cátedra
+(*Orquestación de Playbooks*, s.f.), con un ajuste de
 arquitectura: **n8n orquesta y decide, pero no ejecuta**. n8n no modifica archivos ni ejecuta
 comandos en el equipo: registra la decisión de la persona en la base de datos, y el monitor, que es
 el componente que ya tiene permisos sobre los archivos, la ejecuta. De esta manera no fue necesario
@@ -421,7 +422,8 @@ ngrok en su plan gratuito. Se tomaron las siguientes medidas:
 
 - El túnel deja pasar una única ruta, `POST /webhook/telegram-<sufijo>`, donde el sufijo es aleatorio
   y de 32 caracteres, y se guarda solo en el archivo `.env`. Todo lo demás (el editor de n8n, su API,
-  los formularios y el aviso del monitor) se corta en ngrok y nunca llega al equipo.
+  los formularios y el aviso del monitor) se corta en ngrok, salvo las variantes codificadas de esa
+  ruta que se describen al final de esta sección.
 - El aviso de Telegram debe traer el `secret_token` registrado; si no, n8n responde con el código 403.
 - El toque debe venir de la cuenta de Telegram autorizada. Los toques de otras cuentas se ignoran
   sin respuesta y quedan registrados en la tabla `accesos_rechazados`.

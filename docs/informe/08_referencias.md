@@ -35,6 +35,10 @@ https://ngrok.com/docs/traffic-policy/actions/deny/
 
 ngrok. (s.f.-b). What is ngrok? En *ngrok documentation*. https://ngrok.com/docs/what-is-ngrok/
 
+*Orquestación de Playbooks para Monitoreo de Integridad de Archivos (FIM) con n8n*. (s.f.). Documento
+de diseño, material de cátedra no publicado, Tecnicatura Universitaria en Programación, UTN Facultad
+Regional Mendoza.
+
 OSSEC. (s.f.). Syscheck. En *OSSEC documentation*.
 https://www.ossec.net/docs/docs/manual/syscheck/index.html
 

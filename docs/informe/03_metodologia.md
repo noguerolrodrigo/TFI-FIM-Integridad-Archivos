@@ -98,7 +98,9 @@ y el bot de Telegram.
 ### Ataques controlados con repeticiones
 
 El script `scripts/medir_metricas.py` ejecuta el monitor real como un proceso aparte, apuntado a la
-base `fim_pruebas` y a carpetas temporales, junto con la instancia de n8n de pruebas. En cada
+base `fim_pruebas` y a carpetas temporales, junto con la instancia de n8n de pruebas. El directorio
+vigilado contiene cinco archivos: uno para cada caso que parte de un archivo existente (texto,
+binario, permisos y borrado) y uno para las decisiones. En cada
 repetición aplica cinco cambios controlados, uno por caso: agregar una línea a un archivo de texto de
 aproximadamente 2 KB, reescribir un archivo binario de 1 MB, cambiar los permisos de un archivo (de
 644 a 777), borrar un archivo y crear un archivo que no figura en la línea base. Se realizaron 50
@@ -202,9 +204,13 @@ Las pruebas automatizadas usan pytest, y los gráficos, matplotlib 3.11.2.
   y en los estadísticos, y se analizan por separado. Los faltantes se cuentan y se informan.
 - **Reproducibilidad.** Los resúmenes, los gráficos y el resumen general se generan con scripts a partir
   de los CSV, sin transcribir números a mano. Las esperas aleatorias usan semilla fija.
-- **Uso de valores de terceros.** El documento de diseño de la etapa de orquestación incluía una tabla
-  de resultados simulada. Esos valores no se usan como resultados de este trabajo: en el Capítulo 5 se
-  muestran solo para contrastarlos con los medidos, aclarando que eran supuestos.
+- **Uso de valores de terceros.** La etapa de orquestación partió de un documento de diseño entregado
+  por la cátedra, "Orquestación de Playbooks para Monitoreo de Integridad de Archivos (FIM) con n8n"
+  (*Orquestación de Playbooks*, s.f.), que no fue escrito por el autor de este trabajo; el archivo
+  trae en su encabezado de autores el nombre del alumno junto a un coautor sin completar ("Nombre
+  Apellido"). Su tabla de resultados era simulada, con valores supuestos y no medidos: no se usan
+  como resultados de este trabajo y en el Capítulo 5 se muestran solo para contrastarlos con los
+  medidos.
 
 ## 3.7 Resguardos
 
@@ -215,4 +221,4 @@ Las pruebas automatizadas usan pytest, y los gráficos, matplotlib 3.11.2.
   webhooks y sufijo de la ruta pública) se guardan en un archivo `.env` que no se versiona. El
   repositorio incluye solo una plantilla sin valores.
 - La exposición a internet se limitó a una única ruta, necesaria para los botones de Telegram, con las
-  medidas descriptas en el Capítulo 4.
+  medidas descriptas en el Capítulo 4 y la salvedad sobre el filtro del túnel de la sección 6.4.

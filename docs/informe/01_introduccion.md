@@ -91,8 +91,9 @@ desempeño.
 
 El trabajo abarca el diseño, la implementación y la evaluación de un sistema funcional en un entorno
 de laboratorio: Ubuntu ejecutado sobre el Subsistema de Windows para Linux (WSL2). Los directorios a
-vigilar son configurables, de modo que el sistema puede aplicarse a directorios críticos como `/etc`,
-`/usr/bin` o `/var/www`; sin embargo, la evaluación se realizó sobre un directorio de prueba, y los
+vigilar son configurables, pero la versión actual no admite enlaces simbólicos en ellos: no debe
+apuntarse tal como está a un directorio que los tenga legítimos, como `/etc`, que en el equipo de
+pruebas tiene 765 (secciones 6.4 y 7.1). La evaluación se realizó sobre un directorio de prueba, y los
 archivos de `/etc` solo se usaron, copiados, para medir la duración de un escaneo completo. Vigilar
 directorios del sistema y reponer el propietario de un archivo requiere ejecutar el monitor con
 permisos de superusuario, algo que no formó parte de la evaluación.
