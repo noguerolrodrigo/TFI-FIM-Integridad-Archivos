@@ -41,6 +41,11 @@ desarrollarse un sistema automatizado que detecte alteraciones de archivos en ti
 entornos Linux, extraiga y clasifique la evidencia diferencial de forma inmediata y permita una
 respuesta controlada ante el incidente?**
 
+En este trabajo, "tiempo real" tiene un sentido operativo: la detección se dispara por los eventos
+del sistema de archivos y no por un escaneo periódico. No se fijó de antemano un valor de tiempo a
+partir del cual el objetivo se consideraría incumplido; los tiempos que se informan son los medidos
+(Capítulo 5).
+
 ## 1.3 Justificación y relevancia del estudio
 
 La identificación temprana de alteraciones permite acotar el daño de una intrusión y facilita la
@@ -64,7 +69,8 @@ automatizada.
 ### 1.4.1 Objetivo general
 
 Desarrollar, implementar y evaluar un sistema automatizado de monitoreo de integridad de archivos
-para entornos Linux, capaz de detectar en tiempo real modificaciones no autorizadas, registrar su
+para entornos Linux, capaz de detectar en tiempo real (en el sentido operativo de la sección 1.2)
+modificaciones no autorizadas, registrar su
 evidencia diferencial, responder ante ellas y notificarlas para su decisión humana, midiendo su
 desempeño.
 

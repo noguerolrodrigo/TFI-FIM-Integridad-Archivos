@@ -48,18 +48,24 @@ pruebas, de modo que no afectaran archivos del sistema ni el registro de auditor
 ## 3.3 Variables y métricas
 
 Las variables medidas son tiempos y conteos. En todas las mediciones de tiempo, `t0` es el instante
-en que el script de medición terminó de escribir el archivo (después de cerrarlo).
+en que el script de medición terminó de escribir el archivo (después de cerrarlo). El kernel genera
+el evento de inotify antes, en la propia llamada de escritura, por lo que el tiempo hasta la
+detección queda algo subestimado (sección 5.8).
 
 - **Tiempo hasta la detección (MTTD):** desde `t0` hasta la fila de detección en la base de datos. Se
   toma la marca de tiempo que asigna PostgreSQL al registrar la fila, que corresponde al inicio de la
   transacción de inserción. Incluye, por lo tanto, la notificación del kernel (inotify), el
-  procesamiento de watchdog, el cálculo del hash y la consulta a la línea base.
+  procesamiento de watchdog, el cálculo del hash y la consulta a la línea base. Esa marca indica
+  cuándo el monitor detectó el cambio, no cuándo la fila quedó guardada de forma durable: eso ocurre
+  al terminar el COMMIT, que en este entorno sumó una mediana de 37,9 ms con el disco en reposo
+  (Tabla 5.3) y queda dentro del tiempo hasta la restauración.
 - **Tiempo hasta la restauración (MTTR):** desde `t0` hasta que el archivo vuelve a estar en disco
   como en la línea base. Para un archivo nuevo se mide el aislamiento: el instante en que el archivo
   ya no está en el directorio vigilado, porque fue movido a cuarentena. Como control se registró también el tiempo hasta la fila
   `RESTAURADO` en la base de datos.
 - **Latencia de alerta:** desde la fila de detección hasta la fila en la tabla `notificaciones`, que
-  n8n escribe después de que Telegram aceptó el mensaje.
+  n8n escribe después de que la API de Telegram aceptó el mensaje. La entrega al teléfono y el
+  momento en que la persona lo lee no se midieron.
 - **Latencia de ejecución:** desde la fila en la tabla `decisiones` hasta la fila en la tabla
   `ejecuciones`. Excluye el tiempo que la persona tarda en decidir.
 - **Duración del COMMIT:** tiempo que tarda PostgreSQL en confirmar una inserción, medido con el disco

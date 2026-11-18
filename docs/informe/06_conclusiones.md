@@ -21,11 +21,13 @@ combinando cuatro elementos:
    ejecuta.
 
 En el entorno de laboratorio, sobre 250 cambios controlados de cinco tipos, el sistema registró la
-detección con una mediana de 5,4 ms y dejó el archivo restaurado (o aislado, si era un archivo nuevo)
-con una mediana de 45,4 ms. La alerta con la evidencia llegó a Telegram con una mediana de 1,11 s
-desde la escritura del archivo, en una muestra de diez alertas con el bot real. Una vez que la persona
-decide, el sistema aplica la decisión con una mediana de 938,6 ms. Todos estos valores se midieron en
-una única notebook con WSL2 y sus límites se discuten en la sección 6.4.
+detección con una mediana de 5,4 ms (B2: 5,1 ms) y dejó el archivo restaurado (o aislado, si era un
+archivo nuevo) con una mediana de 45,4 ms (B2: 44,0 ms). La alerta con la evidencia llegó a Telegram
+con una mediana de 1,11 s desde la escritura del archivo, en una muestra de diez alertas con el bot
+real (no se repitió en B2). Una vez que la persona decide, el sistema aplica la decisión con una
+mediana de 938,6 ms (B2: 926,0 ms). Entre paréntesis figura el valor de la corrida B2, hecha sobre
+la versión corregida (sección 5.9). Todos estos valores se midieron en una única notebook con WSL2 y
+sus límites se discuten en la sección 6.4.
 
 ## 6.2 Cumplimiento de los objetivos
 

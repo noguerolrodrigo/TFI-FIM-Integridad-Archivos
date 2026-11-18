@@ -124,8 +124,8 @@ medirlo se tomó una muestra de diez alertas con el bot real, sobre la instalaci
 *Fuente: `resultados/resumen_telegram_real_20261016_000516.md` (datos en
 `resultados/alerta_telegram_real_20261016_000516.csv`).*
 
-Sumando detección y alerta, el tiempo desde la escritura del archivo hasta que Telegram confirmó la
-entrega del mensaje tuvo una mediana de 1,11 s, con valores entre 0,99 y 1,30 s (fuente:
+Sumando detección y alerta, el tiempo desde la escritura del archivo hasta que la API de Telegram
+aceptó el mensaje (la entrega al teléfono no se midió) tuvo una mediana de 1,11 s, con valores entre 0,99 y 1,30 s (fuente:
 `resultados/README.md`, sección 2). La diferencia de aproximadamente un segundo respecto de la
 alerta simulada corresponde a la comunicación con la API de Telegram. Las diez alertas fueron
 cerradas como incidente desde el teléfono, y las diez decisiones quedaron registradas y ejecutadas.
@@ -186,7 +186,9 @@ sobre el mismo archivo (`backupcopy=yes`), por lo que no se observaron renombrad
 
 Estos valores describen un caso controlado con dos editores y no la proporción de alertas espurias
 de un servidor en producción, donde intervienen otros procesos (actualizaciones de paquetes, rotación de
-registros, etc.). Además, el filtro tiene un costo: un archivo malicioso cuyo nombre coincida con un
+registros, etc.). El 0 % depende de un filtro por nombre y vale para vim y nano con la configuración
+por defecto de Ubuntu: no se probaron otros editores ni otras configuraciones, que pueden crear
+temporales con otros nombres. Además, el filtro tiene un costo: un archivo malicioso cuyo nombre coincida con un
 patrón ignorado no se detecta, limitación que se retoma en el Capítulo 6.
 
 ## 5.6 Comparación con un escaneo periódico
@@ -196,7 +198,10 @@ programa con `cron`), se midió primero cuánto tarda un escaneo completo. Se co
 legibles de `/etc` (719 archivos, 1,1 MB) y se recorrieron 20 veces calculando, para cada archivo, el
 hash SHA-256, los permisos y el propietario, con las mismas funciones que usa el FIM. La duración del
 escaneo completo (S) tuvo una mediana de 9,7 ms, con un p95 de 10,6 ms y valores entre 9,2 y 11,5 ms
-(fuente: `resultados/resumen_escaneo_periodico_20261015_235418.md`).
+(fuente: `resultados/resumen_escaneo_periodico_20261015_235418.md`). Ese valor corresponde a 719
+archivos chicos recién copiados, que probablemente se leyeron de la memoria caché y no del disco (el
+estado de la caché no se controló): no es representativo del escaneo de un `/etc` completo ni de
+`/usr/bin`.
 
 Si el escaneo se ejecuta cada T segundos y un cambio ocurre en un instante cualquiera, el cambio
 espera en promedio T/2 hasta el siguiente escaneo, y como máximo T, a lo que se suma la duración
@@ -293,6 +298,12 @@ Los valores atípicos se mantuvieron en los datos. Los más relevantes son:
 
 Además, deben tenerse en cuenta las siguientes amenazas a la validez de los resultados:
 
+- **Instante inicial:** `t0` se toma después de cerrar el archivo, pero el kernel genera el evento en
+  la llamada de escritura (o de borrado, o de cambio de permisos), que es anterior. El monitor puede
+  empezar a trabajar antes de `t0` y el tiempo hasta la detección queda subestimado en ese
+  intervalo, que el script no registra. Los datos no lo acotan; solo muestran que ninguna detección
+  llegó a registrarse antes de `t0`: la búsqueda admite filas de hasta 50 ms antes y, en las 760
+  detecciones de las tres corridas y de la muestra real, el valor mínimo fue de 1,2 ms.
 - **Entorno:** las mediciones se hicieron en una sola notebook con WSL2. El MTTR está dominado por el
   COMMIT de PostgreSQL en el disco virtual (sección 5.2), por lo que los tiempos absolutos de
   restauración no son extrapolables a un servidor con otro almacenamiento.
@@ -380,7 +391,9 @@ régimen rápido durante media corrida no se verificó, porque no se registraron
 del sistema anfitrión; es consistente con la dependencia del almacenamiento de WSL2 ya señalada.
 
 Para comparar las versiones sin mezclar regímenes se tomaron solo las restauraciones de 35 ms o más:
-su mediana fue de 46,1 ms en octubre (214 valores), 46,1 ms en B1 (110) y 44,7 ms en B2 (215).
+su mediana fue de 46,1 ms en octubre (214 valores), 46,1 ms en B1 (110) y 44,7 ms en B2 (215). El
+umbral de 35 ms se eligió después de mirar los datos, como corte descriptivo entre los dos
+regímenes; no es un criterio fijado de antemano.
 
 **El caso del archivo binario de 1 MB empeoró.** Con ese mismo criterio, la mediana del caso binario
 pasó de 52,6 ms en octubre (42 valores) a 55,2 ms en B1 (22) y 56,1 ms en B2 (45), y su p95 sobre
@@ -403,8 +416,10 @@ modificó este resultado.
 
 En síntesis, las correcciones no cambiaron la detección ni la alerta de forma distinguible, la
 restauración de archivos chicos quedó en los mismos valores, y la del archivo de 1 MB es unos 3 ms
-más lenta. Las conclusiones del capítulo se mantienen con los valores de octubre, que son los de la
-versión auditada.
+más lenta. El Resumen y las conclusiones informan los valores de octubre y no los de B2 porque
+octubre es la corrida prevista, la que auditó el tribunal y la única que tiene todas las mediciones
+(la muestra con Telegram real y el escaneo periódico no se repitieron); B2 no estaba planificada, y
+elegirla habría sido elegir después de ver los datos.
 
 ## 5.10 Intervalos de confianza de las medianas
 
