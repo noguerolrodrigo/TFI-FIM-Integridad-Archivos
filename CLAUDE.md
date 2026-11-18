@@ -130,7 +130,18 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   22,4 ms); B2 dio 44,0 ms, como octubre (45,4 ms). El binario de 1 MB quedó unos 3 ms más lento.
   Se informan las dos corridas; no elegir una. Detalle en la sección 6 de `resultados/README.md`.
 - `scripts/armar_readme_resultados.py` regenera solo las secciones 1 a 5 del README de resultados,
-  siempre con los archivos de octubre, y conserva la sección 6 (escrita a mano).
+  siempre con los archivos de octubre, y conserva lo que sigue (escrito a mano).
+- Informe de la segunda instancia: `docs/informe/declaracion_ia.md` (C1, va después del Abstract),
+  `abstract.md`, `siglas.md`, sección 2.9 (estado del arte), 5.9 (efecto de las correcciones), 5.10
+  (intervalos por bootstrap, `scripts/intervalos_bootstrap.py`) y Anexo I (respuesta por ID, con
+  página y commit). Las páginas del Anexo I salen del PDF que exporta
+  `docs/informe/exportar_pdf.py` (LibreOffice, Python del sistema): si cambia la paginación hay que
+  volver a calcularlas.
+- La métrica de los editores se llama "proporción de alertas espurias" (M3); los scripts y CSV
+  conservan `falsos_positivos`. No se encontraron fuentes verificables para PCI DSS 11.5.2, una
+  definición normativa de MTTD/MTTR ni *human-in-the-loop*: no citarlas.
+- `docs/informe/vista_previa_*.pdf` y las fotos `celular_*.jpg` están en `.gitignore`. No usar
+  `git add -A` sobre carpetas: agregar los archivos por nombre.
 
 ## CÓDIGO CONGELADO (desde el 16/10/2026; reabierto solo para M2 y m8, cerrado en `39c661c`)
 - No se agregan funcionalidades. Solo se aceptan arreglos de errores, cada uno en su commit, con

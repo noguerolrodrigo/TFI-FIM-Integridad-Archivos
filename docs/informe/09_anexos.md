@@ -794,3 +794,49 @@ la sección 5.9.
 | `falsos_positivos_20261117_200051.csv` y `resumen_falsos_positivos_20261117_200051.md` | Ediciones con vim y nano sobre la versión corregida. |
 | `intervalos_bootstrap_20261015.csv` / `.md` | Intervalos de confianza del 95 % de las medianas de octubre (sección 5.10). |
 | `README.md` | Lectura de los resultados, comparación con la tabla supuesta del documento de diseño y comparación entre la versión de octubre y la corregida (sección 6). |
+
+## Anexo I: Respuesta a la devolución de la primera instancia
+
+El tribunal pidió, junto con la versión corregida, una tabla de respuesta por cada hallazgo de la
+devolución. Las páginas corresponden a este documento y los commits, al repositorio del Anexo A.
+Donde una corrección no se pudo cumplir del todo, se indica en la misma fila.
+
+**Tabla I.1.** Respuesta a cada hallazgo de la devolución.
+
+| ID | Hallazgo | Qué se cambió | Sección y página | Commit |
+|---|---|---|---|---|
+| C1 | Uso no declarado de un asistente de IA generativa en el código y en la redacción. | Se agregó la Declaración de uso de herramientas de IA generativa en los preliminares: herramientas y modelos, para qué se usaron, qué hizo el autor y cómo verificó lo generado. 3.2 remite a ella y 4.10 suma las tres herramientas. | Declaración (p. 4); 3.2 (p. 23); 4.10 (p. 45) | `e04b737` |
+| M1 | Marco teórico sin estado del arte y con pocas fuentes académicas. | Sección 2.9 con antecedentes, tabla comparativa de ocho herramientas y mecanismos (Tabla 2.1) y un cierre con la brecha y el aporte. Citas para Tripwire y AIDE en 1.2 y para SOAR y playbooks en 2.5. Quince referencias nuevas, todas abiertas y verificadas. No se pudo cumplir del todo: se buscó y no se pudo verificar en su fuente oficial el requisito 11.5.2 de PCI DSS v4.0, una definición normativa de MTTD y MTTR, una fuente para *human-in-the-loop* ni el contenido de la guía de SIEM y SOAR de CISA; no se citan y las afirmaciones se acotaron (2.5 y 2.6). De Kim y Spafford (1994) se verificó la ficha bibliográfica, no el texto completo; de Peddoju et al. (2020) y Salman et al. (2022), los resúmenes. | 2.9 (p. 19); 1.2 (p. 12); 2.5 (p. 17); 2.6 (p. 18); Referencias (p. 68) | `7b47110`, `9875245` |
+| M2 | La restauración seguía enlaces simbólicos en un temporal de nombre predecible, y ese prefijo nunca se vigilaba. | Código: temporal de nombre aleatorio con apertura exclusiva, el filtro ignora solo los temporales propios y el reemplazo de un archivo por un enlace se detecta sin seguirlo, con la prueba de concepto del tribunal como prueba automatizada. Informe: 4.3 y 4.4 explican cada medida, 5.9 mide el efecto con una nueva corrida, y los Anexos A y D se actualizaron al commit final `39c661c`. No queda cerrado del todo: 6.4 declara las limitaciones que quedan (enlaces simbólicos no soportados, intervalo entre comprobar la carpeta y escribir, escrituras que siguen sobre el mismo archivo, archivo nuevo movido por nombre, diff en memoria y lecturas por nombre) y 7.1 condiciona a ellas la ejecución como superusuario. | 4.3 (p. 32); 4.4 (p. 34); 5.9 (p. 54); 6.4 (p. 61); 7.1 (p. 65); Anexo A (p. 71); Anexo D (p. 73) | Código: `1701769`, `3b246fe`, `3a44743`. Informe: `409d553`, `05245c4`. Resultados: `da4ed7a` |
+| M3 | La "tasa de falsos positivos" no era la convencional. | La métrica pasa a llamarse proporción de alertas espurias en todo el informe. 3.3 la define una sola vez, con la fórmula FP / (VP + FP), y explica la diferencia con FP / (FP + VN) y por qué acá no hay verdaderos negativos contables. Los scripts y los CSV conservan su nombre, con una nota. | Resumen (p. 2); 2.6 (p. 18); 3.3 (p. 24); 5.5 (p. 49); 5.7 (p. 51); 6.3 (p. 60) | `c7fe6bc` |
+| m1 | 4.7 hablaba de dos canales de decisión y `restaurar.py` era un tercero. | 4.7 describe los tres caminos y cómo conviven con la regla de una decisión por evento. Se corrigió el comentario de `.env.example`. Que `restaurar.py` no registre una decisión ni avise a n8n queda como limitación (6.4) y como trabajo futuro (7.2). | 4.7 (p. 40); 6.4 (p. 61); 7.2 (p. 66); Anexo C (p. 73) | `2488e91`, `3cded82` |
+| m2 | 4.6 y D.5 describían distinto el aviso a n8n. | Los dos textos dicen lo mismo que el código: tipo de aviso, identificador del evento y resultado. | 4.6 (p. 38); D.5 (p. 78) | `0b14bfc` |
+| m3 | "Compatible con la variabilidad esperable" sin cálculo. | Se agregó el cálculo, rehecho desde el CSV: la diferencia equivale a 1,1 errores estándar. | 5.6 (p. 50) | `fd51288`, `286da13` |
+| m4 | Las medianas no tenían intervalos de confianza. | Intervalos de confianza del 95 % por bootstrap para las medianas principales, en una tabla aparte (Tabla 5.13), con el método descripto en 3.6. | 3.6 (p. 28); 5.10 (p. 57) | `3eabf6f` |
+| m5 | "De los 15 valores medidos": el CSV tiene 19. | Se aclara que los 15 excluyen los 4 valores del control y que el control del borrado (401,2 ms) también es máximo. | 5.8 (p. 52) | `5786f9d` |
+| m6 | "Esto reduce el tiempo de análisis" no se midió. | Queda formulado como expectativa de diseño, y se dice que no se midió. | 1.3 (p. 13) | `e9028c1` |
+| m7 | La afirmación sobre las PyMEs no tenía fuente. | No apareció una fuente verificable. La afirmación se acotó: es el escenario para el que se diseñó el sistema, no un dato sobre el conjunto de las PyMEs. | 1.2 (p. 12) | `6053f82` |
+| m8 | Una prueba de `tests/test_permisos.py` fallaba al ejecutarse como superusuario. | La prueba se saltea con `skipif(os.geteuid() == 0)`. | Código (`tests/test_permisos.py`) | `80ba02c` |
+| m9 | Las definiciones de las métricas se repetían en 3.3 y 5.1. | Quedan solo en 3.3; 5.1 remite a ellas. | 3.3 (p. 24); 5.1 (p. 46) | `daceb94` |
+| f1 | Las líneas de código largas se cortaban en los anexos. | Las líneas de más de 90 caracteres se parten al armar el documento: la continuación conserva la sangría y repite el signo de comentario o empieza con la marca ». Verificado en el PDF línea por línea. | Anexo C (p. 73); Anexo D (p. 73) | `3a7401f` |
+| f2 | Nombres de archivo partidos en las tablas. | El ancho de cada columna asegura primero su palabra más larga. | 3.5 (p. 27); Tabla 4.2 (p. 38); Tabla E.1 (p. 82); Tabla H.1 (p. 85) | `d83bdde` |
+| f3 | Espaciado inconsistente de las unidades. | Espacio fino de no separación entre cada número y su unidad. | Todo el documento | `9c3400e` |
+| f4 | Faltaban el índice de figuras, el de tablas y la lista de siglas. | Se agregaron después del índice general. | Índice de figuras (p. 9); Índice de tablas (p. 10); Lista de siglas (p. 11) | `27a7498` |
+| f5 | La portada decía "Docentes" sin el rol y no había Abstract. | La portada indica los directores de tesis y el título al que se aspira. Se agregó el Abstract con sus palabras clave. | Portada (p. 1); Abstract (p. 3) | `a79a810` |
+| f6 | La Figura 5.1 quedaba aplastada por un atípico y la Figura 4.3 mostraba URL firmadas. | Figura 5.1 en escala logarítmica, con el atípico anotado. Se ocultó la firma de los enlaces en las Figuras 4.2 y 4.3. | Figura 5.1 (p. 54); Figura 4.2 (p. 42); Figura 4.3 (p. 43) | `ea782d2` |
+
+Al corregir el hallazgo M2 se revisó si el mismo problema (seguir enlaces, o verificar y usar en
+momentos distintos) existía en otras partes del sistema. Se encontraron y corrigieron los defectos
+de la Tabla I.2, que el tribunal no había pedido. Cada uno tiene su prueba automatizada.
+
+**Tabla I.2.** Correcciones adicionales no pedidas.
+
+| Defecto encontrado | Corrección | Commit |
+|---|---|---|
+| Si una carpeta del camino se reemplazaba por un enlace, la restauración escribía fuera del directorio vigilado. | Se comprueba la carpeta real antes de leer y antes de restaurar; si quedó afuera, no se lee ni se escribe. | `15d201d` |
+| El hash, el diff y la copia a cuarentena abrían el archivo tres veces por su nombre. | Una sola apertura sin seguir enlaces; las tres lecturas salen del mismo descriptor. | `86d9c00` |
+| Los permisos y el propietario se reponían por nombre, siguiendo enlaces. | Se reponen sobre el descriptor (`fchmod`, `fchown`); al aceptar un evento `PERMISOS` se comprueba que siga habiendo un archivo común. | `7110ae5` |
+| El monitor podía tomar por un archivo nuevo el temporal de una restauración hecha por `restaurar.py`. | Candado entre procesos (`flock`). | `2347c6f` |
+| El generador de línea base seguía los enlaces simbólicos. | Los saltea y los lista por pantalla. | `605ce54` |
+| El escaneo inicial no veía los enlaces a directorios. | Los incluye entre las rutas a verificar. | `83afcf7` |
+| Un enlace nuevo se eliminaba también en modo de aprobación. | En ese modo se registra, se avisa y espera la decisión. | `39c661c` |
