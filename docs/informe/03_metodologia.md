@@ -27,6 +27,10 @@ la primera instancia de evaluación se hicieron con el mismo método (primero un
 el problema, después el cambio mínimo que lo resuelve, un cambio por commit), y sobre la versión
 corregida se repitieron las mediciones que dependen del código modificado (sección 5.9).
 
+En el desarrollo y en la redacción se usaron herramientas de inteligencia artificial generativa.
+Cuáles fueron, para qué se usaron, qué decisiones tomó el autor y cómo se verificó lo generado se
+detalla en la Declaración de uso de herramientas de IA generativa, que precede al índice.
+
 **Evaluación.** La evaluación consistió en mediciones repetidas en un entorno de laboratorio
 controlado, sobre la versión congelada. No se trata de un experimento con grupo de control, sino de
 un estudio con condiciones controladas e iguales para todas las repeticiones. Se incluyeron dos

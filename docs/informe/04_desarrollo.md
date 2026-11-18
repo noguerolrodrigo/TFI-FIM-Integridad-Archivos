@@ -525,3 +525,11 @@ misma que se usó en las mediciones del Capítulo 5.
   gratuito.
 - **Entorno:** Ubuntu sobre el Subsistema de Windows para Linux (WSL2).
 - **Control de versiones:** Git, con un repositorio remoto.
+- **Herramientas de IA generativa:** Gemini (Google), asistente de chat, en la etapa previa al
+  informe de avance, como ayuda para los dos scripts originales y el primer borrador del informe;
+  Claude Code (Anthropic), en octubre y noviembre de 2026, para generar el código, las pruebas, los
+  scripts de medición y de armado del documento y la redacción del informe final, a partir de las
+  instrucciones del autor; y Claude (Anthropic), asistente de chat, para planificar los pasos y
+  redactar esas instrucciones. El detalle, con los modelos utilizados y la forma en que se verificó
+  lo generado, está en la Declaración de uso de herramientas de IA generativa, que precede al
+  índice.

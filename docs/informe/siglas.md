@@ -9,6 +9,7 @@
 | FIM | Monitoreo de integridad de archivos (*File Integrity Monitoring*) |
 | FP | Falso positivo |
 | HTTP | Protocolo de transferencia de hipertexto (*Hypertext Transfer Protocol*) |
+| IA | Inteligencia artificial |
 | IC | Intervalo de confianza |
 | JSON | Notación de objetos de JavaScript (*JavaScript Object Notation*) |
 | MTTD | Tiempo medio de detección (*Mean Time To Detect*) |

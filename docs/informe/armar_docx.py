@@ -467,12 +467,15 @@ class Armador:
 
     def lista(self, numerada, items):
         num_id = self.numeracion.nueva(ABSTRACT_DECIMAL if numerada else ABSTRACT_VINETAS)
+        parrafos = []
         for k, item in enumerate(items):
             p = self.doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             _set_spacing(p, 0, 120 if k < len(items) - 1 else 240)
             _aplicar_lista(p, num_id)
             escribir_inline(p, item, 12)
+            parrafos.append(p)
+        return parrafos
 
     def referencia(self, texto):
         """Entrada de la lista de referencias: sangría francesa, alineada a la izquierda."""
@@ -757,7 +760,8 @@ def agregar_pie_con_numero(doc):
 
 def volcar_resumen(armador, ruta, titulo="Resumen"):
     """El Resumen va como en el avance: título centrado (sin estilo de capítulo) y texto con sangría.
-    El Abstract en inglés usa el mismo formato."""
+    El Abstract en inglés y la declaración de uso de IA usan el mismo formato; la declaración tiene
+    además subtítulos (###) y listas. Nada de esto usa estilos de título, así que no entra al índice."""
     doc = armador.doc
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -767,9 +771,21 @@ def volcar_resumen(armador, ruta, titulo="Resumen"):
     _fuente(run, tamano=14, negrita=True)
     for tipo, contenido in leer_bloques(ruta):
         if tipo == "titulo":
+            if contenido[0] == 3:
+                subtitulo = doc.add_paragraph()
+                _set_spacing(subtitulo, 120, 120)
+                subtitulo.paragraph_format.left_indent = Pt(30)
+                _mantener_con_siguiente(subtitulo)
+                _fuente(subtitulo.add_run(contenido[1]), tamano=12, negrita=True)
+            continue
+        if tipo == "lista":
+            # Misma sangría que los párrafos del preliminar (30 pt a cada lado)
+            for item in armador.lista(*contenido):
+                item.paragraph_format.left_indent = Pt(48)
+                item.paragraph_format.right_indent = Pt(30)
             continue
         if tipo != "parrafo":
-            raise ValueError(f"{titulo} solo admite párrafos; apareció {tipo}")
+            raise ValueError(f"{titulo} solo admite párrafos y listas; apareció {tipo}")
         p = armador.parrafo(contenido)
         p.paragraph_format.left_indent = Pt(30)
         p.paragraph_format.right_indent = Pt(30)
@@ -829,6 +845,8 @@ def main():
     for c in resumen:
         volcar_resumen(armador, os.path.join(AQUI, c))
     volcar_resumen(armador, os.path.join(AQUI, "abstract.md"), "Abstract")
+    volcar_resumen(armador, os.path.join(AQUI, "declaracion_ia.md"),
+                   "Declaración de uso de herramientas de IA generativa")
 
     # El índice tiene que ir antes de los capítulos, pero necesita sus títulos: se arma al final
     # en un documento aparte y se mueve. Más simple: se recorren los capítulos dos veces.
