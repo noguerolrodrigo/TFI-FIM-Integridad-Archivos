@@ -429,13 +429,13 @@ sobre los datos de octubre, sin medir nada nuevo.
 | Restauración en disco, borrado | 50 | 45,1 | 43,1 a 46,0 |
 | Restauración en disco, archivo nuevo | 50 | 44,4 | 43,0 a 45,0 |
 | Alerta con Telegram simulado, cinco casos | 250 | 124,7 | 123,8 a 127,0 |
-| Ejecución de una decisión | 50 | 938,6 | 593,9 a 1.349,7 |
+| Ejecución de una decisión | 50 | 938,6 | 593,9 a 1349,7 |
 | COMMIT con el disco en reposo | 50 | 37,9 | 37,5 a 38,4 |
 | COMMIT en ráfaga | 50 | 1,8 | 1,5 a 1,9 |
-| Alerta con Telegram real | 10 | 1.105,4 | 1.010,9 a 1.202,0 |
-| Escritura a alerta con Telegram real | 10 | 1.109,5 | 1.017,1 a 1.207,6 |
+| Alerta con Telegram real | 10 | 1105,4 | 1010,9 a 1202,0 |
+| Escritura a alerta con Telegram real | 10 | 1109,5 | 1017,1 a 1207,6 |
 | Escaneo completo de 719 archivos (S) | 20 | 9,7 | 9,4 a 9,8 |
-| Detección con escaneo cada 10 s | 30 | 4.292,0 | 2.341,7 a 5.970,7 |
+| Detección con escaneo cada 10 s | 30 | 4292,0 | 2341,7 a 5970,7 |
 
 *Fuente: `intervalos_bootstrap_20261015.csv`, en la carpeta `resultados/`, generado por
 `scripts/intervalos_bootstrap.py` (10.000 remuestras, semilla 2026) a partir de los CSV de las
