@@ -159,7 +159,16 @@ Las siguientes limitaciones deben tenerse en cuenta al interpretar el sistema y 
   lo creó puede fallar hasta que una persona responda "Era un cambio autorizado" y el monitor lo
   reponga.
 - **Propietario.** Reponer el propietario de un archivo requiere ejecutar el monitor como superusuario;
-  sin esos permisos, el cambio se registra pero no se repone.
+  sin esos permisos, el cambio se registra pero no se repone. Esto alcanza también a la
+  restauración del contenido: el archivo restaurado es un archivo nuevo, que nace a nombre del
+  usuario que ejecuta el monitor. Como superusuario, el monitor le repone el propietario de la línea
+  base antes de ponerlo en su lugar. Sin superusuario, si el archivo pertenecía a otro usuario, el
+  contenido y los permisos se restauran pero el archivo queda a nombre del usuario del monitor: es
+  el propio sistema el que introduce ese cambio. Queda anotado en la fila `RESTAURADO`, y el evento
+  siguiente sobre esa ruta lo informa como un cambio de propietario que no se pudo reponer. Hasta
+  el 22 de noviembre de 2026 (commit `f2889ed`) el propietario no se reponía en ningún caso; lo
+  detectó el tribunal en la segunda instancia (Anexo A). El grupo del archivo no se registra en la
+  línea base y no se repone.
 - **Base de datos caída.** Sin acceso a la línea base no se restaura: se guarda la evidencia y el evento
   queda en un registro local, pero esos eventos no se reinsertan automáticamente cuando vuelve la base
   de datos.

@@ -8,7 +8,9 @@ proyecto. El capítulo describe la versión final, cerrada el 17 de noviembre de
 `39c661c`), que incorpora las correcciones pedidas en la primera instancia de evaluación sobre la
 versión congelada el 16 de octubre (commit `81b1bc8`). Esas correcciones se concentran en la
 restauración y en el tratamiento de los enlaces simbólicos (secciones 4.3 y 4.4); donde el
-comportamiento cambió respecto de la versión de octubre, se indica.
+comportamiento cambió respecto de la versión de octubre, se indica. Después de la devolución de la
+segunda instancia se agregó una corrección más, la reposición del propietario al restaurar (commit
+`f2889ed`, del 22 de noviembre; sección 4.3 y Anexo A).
 
 ## 4.1 Punto de partida: la versión del informe de avance
 
@@ -45,7 +47,9 @@ redacción de este informe. Entre el primer commit, el 12 de octubre de 2026, y 
 código, el 16 de octubre, el repositorio acumuló 50 commits. Los commits siguientes solo
 agregaron documentación y este informe. El 17 de noviembre de 2026, después de la devolución de la primera instancia, se agregaron 11 commits de código y pruebas con las correcciones
 descriptas en las secciones 4.3 y 4.4; el último de ellos, `39c661c`, es el commit número 80 del
-repositorio y cierra el código de la aplicación.
+repositorio y es la versión sobre la que se repitieron las mediciones. El 22 de noviembre, tras la
+devolución de la segunda instancia, se agregó un commit de código y pruebas (`f2889ed`), que repone
+el propietario del archivo al restaurarlo (sección 4.3) y cierra el código de la aplicación.
 
 ## 4.2 Arquitectura general
 
@@ -149,7 +153,10 @@ quedó incorporada a las pruebas automatizadas y la restauración se corrigió c
 - **Escritura sobre el descriptor.** El contenido, los permisos y las fechas se copian sobre el
   descriptor del archivo recién creado (`os.fchmod`, `os.utime`), no sobre su nombre. Aunque alguien
   cambie lo que hay en ese nombre mientras se copia, el monitor sigue escribiendo en el archivo que
-  él creó. El renombrado final tampoco sigue enlaces: si el archivo vigilado fue reemplazado por un
+  él creó. Como ese archivo es nuevo, nace a nombre del usuario que ejecuta el monitor: antes del
+  renombrado se le repone el propietario registrado en la línea base, con `os.fchown` sobre el
+  mismo descriptor, y si el monitor no tiene permiso para hacerlo la restauración se completa igual
+  y la falta queda anotada en el registro (sección 6.4). El renombrado final tampoco sigue enlaces: si el archivo vigilado fue reemplazado por un
   enlace, `os.replace` reemplaza el enlace.
 - **Registro de temporales propios.** `filtros.py` dejó de ignorar por prefijo, porque un nombre que
   alcanza para ser ignorado es una forma de esconderse: cualquier archivo llamado `.fim_tmp_algo`
@@ -499,15 +506,19 @@ webhook de Telegram sin mostrar los secretos en pantalla.
 
 ## 4.9 Pruebas automatizadas
 
-El proyecto cuenta con 193 pruebas automatizadas con pytest, que se ejecutan desde la raíz del
-repositorio (162 en la versión de octubre y 31 agregadas con las correcciones de la segunda
-instancia). El repositorio tiene además 3 pruebas del script de análisis de intervalos de confianza,
-que no es parte de la aplicación: en total, 196. Cubren, entre otros aspectos:
+El proyecto cuenta con 203 pruebas automatizadas con pytest, que se ejecutan desde la raíz del
+repositorio (162 en la versión de octubre, 31 agregadas con las correcciones de la segunda
+instancia y 10 con la reposición del propietario al restaurar). El repositorio tiene además 3
+pruebas del script de análisis de intervalos de confianza, que no es parte de la aplicación: en
+total, 206. Cubren, entre otros aspectos:
 
 - la bóveda (restauración de binarios y permisos, restauración atómica, archivos sin respaldo);
 - la clasificación de eventos y la respuesta a cada tipo, incluidos los movimientos y el reemplazo
   por renombrado;
 - los cambios de permisos y de propietario, el escaneo inicial y los archivos ignorados;
+- el propietario del archivo restaurado, en el monitor, en `restaurar.py` y al aceptar un cambio:
+  con `os.fchown` simulado, con y sin permiso, y con un cambio de propietario real en una prueba que
+  solo se ejecuta como superusuario;
 - los enlaces simbólicos: la prueba de concepto del tribunal, el reemplazo de un archivo o de una
   carpeta por un enlace, el cambio del archivo entre la verificación y la copia, y el candado entre
   el monitor y `restaurar.py`;

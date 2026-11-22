@@ -91,10 +91,10 @@ provienen del mismo reloj y no hay desfase entre ellas.
 
 ### Verificación funcional
 
-El comportamiento del sistema se verificó con 193 pruebas automatizadas (pytest); eran 162 en la
-versión medida en octubre, y las 31 restantes acompañan las correcciones de la segunda instancia
-(sección 5.9). Otras 3 pruebas cubren el script de análisis de intervalos de confianza, con lo que el
-repositorio tiene 196. Las pruebas del
+El comportamiento del sistema se verificó con 203 pruebas automatizadas (pytest); eran 162 en la
+versión medida en octubre, 31 acompañan las correcciones de la segunda instancia (sección 5.9) y 10
+la reposición del propietario al restaurar (sección 4.3). Otras 3 pruebas cubren el script de
+análisis de intervalos de confianza, con lo que el repositorio tiene 206. Las pruebas del
 monitor usan una línea base en memoria para no depender de la base de datos; las de integración se
 ejecutan sobre una base separada (`fim_pruebas`), que un script reconstruye con el mismo esquema que
 la base productiva. Además se realizaron pruebas de punta a punta con el monitor real, una instancia

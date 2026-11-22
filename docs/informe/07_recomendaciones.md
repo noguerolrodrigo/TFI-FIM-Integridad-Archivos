@@ -19,7 +19,9 @@ un entorno productivo y las líneas de trabajo futuro que surgen de las limitaci
    vigilando directorios del sistema, algo que no formó parte de este trabajo.
 2. **Proteger la bóveda.** Ubicar la copia confiable en otro equipo, o al menos hacer que pertenezca a
    un usuario distinto del que puede modificar los archivos vigilados, de modo que comprometer un
-   archivo no permita también alterar su copia.
+   archivo no permita también alterar su copia. Es el camino que sigue el sistema ICAR, que guarda
+   las copias de respaldo y la base de hashes en un almacenamiento protegido físicamente contra
+   escritura (Kaczmarek y Wróbel, 2014).
 3. **Proteger el registro también frente al administrador de la base de datos.** El registro es de
    solo-agregar para las cuentas de la aplicación. Para que lo sea también frente al superusuario,
    puede enviarse una copia de los eventos a un almacenamiento externo de solo escritura.

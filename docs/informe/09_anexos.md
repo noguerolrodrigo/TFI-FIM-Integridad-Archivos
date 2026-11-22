@@ -7,7 +7,7 @@ y los resultados están en un repositorio público:
 
 <https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos>
 
-El informe se refiere a dos versiones del código:
+El informe se refiere a tres versiones del código:
 
 **Versión medida en octubre (primera instancia).** Es el commit de congelamiento del 16 de octubre
 de 2026, sobre el que se hicieron las mediciones de las secciones 5.1 a 5.8 y que auditó el
@@ -17,19 +17,28 @@ tribunal:
 
 <https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos/tree/81b1bc8709a2949010d4c4b97a9c5ca3a184276d>
 
-**Versión final corregida (segunda instancia).** Es el commit del 17 de noviembre de 2026 que cierra
-el código de la aplicación, sobre el que se hicieron las mediciones de la sección 5.9:
+**Versión corregida (segunda instancia).** Es el commit del 17 de noviembre de 2026 sobre el que se
+hicieron las mediciones de la sección 5.9 y que auditó el tribunal en la segunda instancia:
 
 `39c661cf99c09befb887c7a8c47e095582aa58aa`
 
 <https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos/tree/39c661cf99c09befb887c7a8c47e095582aa58aa>
+
+**Versión final (para la defensa).** Es el commit del 22 de noviembre de 2026 que cierra el código de
+la aplicación. Agrega una sola corrección, la del hallazgo n1 de la devolución de la segunda
+instancia:
+
+`f2889ede7dd9ec7fdca5d9e42847321a33b5058d`
+
+<https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos/tree/f2889ede7dd9ec7fdca5d9e42847321a33b5058d>
 
 Para obtener exactamente una de esas versiones:
 
 ```bash
 git clone https://github.com/noguerolrodrigo/TFI-FIM-Integridad-Archivos.git
 cd TFI-FIM-Integridad-Archivos
-git checkout 39c661cf99c09befb887c7a8c47e095582aa58aa    # o 81b1bc8709a2949010d4c4b97a9c5ca3a184276d
+git checkout f2889ede7dd9ec7fdca5d9e42847321a33b5058d
+# o 39c661cf99c09befb887c7a8c47e095582aa58aa, o 81b1bc8709a2949010d4c4b97a9c5ca3a184276d
 ```
 
 Entre una y otra hay 11 commits de código y pruebas, todos del 17 de noviembre de 2026, que
@@ -42,6 +51,23 @@ antes de restaurar, el generador de línea base saltea los enlaces y se agrega u
 monitor y `restaurar.py`. No cambiaron las migraciones ni los workflows de n8n. Los demás commits
 posteriores al congelamiento agregan los capítulos de este informe, sus figuras, los resultados de
 las corridas nuevas y un ajuste del script que arma el resumen de resultados.
+
+Entre la versión corregida y la final hay un solo commit de código y pruebas (`f2889ed`). Hasta
+entonces, la restauración dejaba el archivo a nombre del usuario que ejecuta el monitor, porque el
+archivo restaurado es uno nuevo que se renombra sobre el original, y no se le reponía el
+propietario. El tribunal lo comprobó ejecutando el monitor como superusuario: un archivo de la línea
+base del usuario 1000 quedaba a nombre del superusuario y el evento siguiente lo informaba como un
+cambio de propietario. Ahora, antes del renombrado, se aplica `os.fchown` sobre el descriptor del
+temporal con el propietario de la línea base; si el monitor no tiene permiso, restaura igual y lo
+deja anotado (secciones 4.3 y 6.4). El cambio alcanza al monitor, a `restaurar.py` y a la aceptación
+de un cambio, y agrega 10 pruebas.
+
+Esta corrección no afecta las mediciones del Capítulo 5, que no se repitieron. En el laboratorio
+los archivos vigilados pertenecían al mismo usuario que ejecutaba el monitor, que es el mismo caso
+por el que el defecto no se había manifestado: el archivo restaurado ya nacía con el propietario
+correcto. En ese caso la versión final no llega a llamar a `os.fchown`; lo único que agrega a cada
+restauración es una consulta del propietario del temporal (`os.fstat`) para compararlo con el de la
+línea base. El costo de esa consulta no se midió.
 
 Los fragmentos de los anexos siguientes son de la versión final, y los números de línea
 corresponden a ella.
@@ -64,7 +90,7 @@ corresponden a ella.
 | `sql/` | Migraciones de la base de datos, numeradas de la 01 a la 06. |
 | `n8n/` | Workflows de n8n en JSON, scripts para iniciar n8n y el túnel ngrok, política del túnel y guía de instalación. |
 | `scripts/` | Base de datos de pruebas, n8n de pruebas con Telegram simulado y scripts de medición y resumen. |
-| `tests/` | 196 tests automatizados (pytest): 193 de la aplicación y 3 del script de intervalos de confianza. |
+| `tests/` | 206 tests automatizados (pytest): 203 de la aplicación y 3 del script de intervalos de confianza. |
 | `resultados/` | Mediciones en CSV, resúmenes, gráficos y descripción del entorno. |
 | `directorio_prueba/` | Directorio vigilado en las pruebas. |
 | `docs/` | Documentos de referencia y los capítulos de este informe. |
@@ -159,7 +185,7 @@ def verificar(ruta, hash_actual, owner=None, permisos=None, es_enlace=False):
     return SIN_CAMBIOS, baseline
 ```
 
-### D.2 Los eventos como disparadores (`monitor_fim.py`, líneas 754–780)
+### D.2 Los eventos como disparadores (`monitor_fim.py`, líneas 766–792)
 
 Los cuatro manejadores de watchdog llaman a la misma función, `procesar()`.
 
@@ -193,7 +219,7 @@ class FIMEventHandler(FileSystemEventHandler):
             procesar(event.dest_path, movido_desde=event.src_path)
 ```
 
-### D.3 Evidencia y respuesta (`monitor_fim.py`, fragmentos de las líneas 416–594)
+### D.3 Evidencia y respuesta (`monitor_fim.py`, fragmentos de las líneas 422–603)
 
 El orden es: comprobar la carpeta, abrir el archivo una sola vez sin seguir enlaces, verificar,
 registrar la evidencia en la base de datos, copiarla a cuarentena y, recién después, restaurar. Solo
@@ -310,10 +336,11 @@ def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, 
                 return PENDIENTE, evento_id
             else:
                 # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
-                boveda.restaurar(ruta)
+                # con el dueño que tiene en la baseline (el archivo repuesto es uno nuevo)
+                propietario_repuesto = boveda.restaurar(ruta, owner=baseline["owner"])
                 log_to_db(nombre, ruta, get_sha256(ruta), RESTAURADO,
                           f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por)
-                          + nota_copia,
+                          + nota_copia + nota_si_falta_el_propietario(propietario_repuesto, baseline["owner"]),
                           hash_anterior=h, ruta_cuarentena=ruta_cuarentena)
                 # [...]
                 resultado = RESTAURADO
@@ -323,11 +350,33 @@ def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, 
     return resultado, evento_id
 ```
 
-### D.4 Restauración atómica y temporales propios (`boveda.py`, líneas 36–65; `filtros.py`, líneas 14–19)
+### D.4 Restauración atómica y temporales propios (`boveda.py`, líneas 40–96; `filtros.py`, líneas 14–19)
 
 ```python
-def reponer_desde(origen, ruta):
-    """Copia origen sobre ruta (bytes, permisos y fechas) sin que el archivo quede a medio escribir."""
+def reponer_propietario(descriptor, owner):
+    """Deja el archivo abierto a nombre del uid pedido. Devuelve False si no se pudo.
+
+    owner llega como lo guarda la baseline: el uid en texto, o "N/A" si no se pudo leer.
+    """
+    if owner is None or not str(owner).isdigit():
+        return True
+    uid = int(owner)
+    if os.fstat(descriptor).st_uid == uid:
+        return True
+    try:
+        # Cambiar el dueño de un archivo solo lo puede hacer root. El grupo no se toca (-1):
+        # la baseline no lo registra.
+        os.fchown(descriptor, uid, -1)
+        return True
+    except OSError:
+        return False
+
+def reponer_desde(origen, ruta, owner=None):
+    """Copia origen sobre ruta (bytes, permisos y fechas) sin que el archivo quede a medio escribir.
+
+    Si se pasa owner (uid), el archivo queda a nombre de ese usuario. Devuelve False si eso no
+    se pudo (falta root): el contenido se repone igual.
+    """
     carpeta, nombre = os.path.split(os.path.abspath(ruta))
     os.makedirs(carpeta, exist_ok=True)
 
@@ -346,10 +395,15 @@ def reponer_desde(origen, ruta):
                 shutil.copyfileobj(fuente, destino)
                 destino.flush()
                 datos = os.fstat(fuente.fileno())
+                # El temporal nace a nombre del usuario que corre el monitor. El dueño se repone
+                # antes del renombrado, para que el archivo nunca aparezca en su ruta con otro
+                # dueño, y antes de los permisos, porque cambiar el dueño borra el bit setuid.
+                propietario_repuesto = reponer_propietario(destino.fileno(), owner)
                 os.fchmod(destino.fileno(), stat.S_IMODE(datos.st_mode))
                 os.utime(destino.fileno(), ns=(datos.st_atime_ns, datos.st_mtime_ns))
             # os.replace renombra el nombre, sin seguir enlaces: si ruta es un enlace, lo reemplaza
             os.replace(temporal, ruta)
+            return propietario_repuesto
         except BaseException:
             if os.path.lexists(temporal):
                 os.unlink(temporal)
@@ -399,7 +453,7 @@ def _enviar(url, datos):
         print(f"[!] No se pudo avisar a n8n ({datos}): {e}")
 ```
 
-### D.6 Ejecución de las decisiones (`monitor_fim.py`, líneas 652–671)
+### D.6 Ejecución de las decisiones (`monitor_fim.py`, líneas 664–683)
 
 n8n registra la decisión de la persona en la tabla `decisiones`; el monitor la valida y la aplica.
 

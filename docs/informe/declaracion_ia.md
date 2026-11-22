@@ -12,7 +12,8 @@ para qué las usé, qué hice yo y cómo verifiqué lo que generaron.
 - **Claude Code (Anthropic).** Lo usé en la etapa de octubre y noviembre de 2026. Los modelos
   figuran en las líneas `Co-Authored-By` del historial del repositorio: Claude Opus 5.5 (commits del
   12 al 19 de octubre), Claude Fable 5.1 (del 26 de octubre al 17 de noviembre) y Claude Fable 5.2
-  (17 de noviembre, correcciones de la segunda instancia).
+  (del 17 al 22 de noviembre: correcciones de la segunda instancia, revisión final y corrección
+  posterior a la devolución de la segunda instancia).
 - **Claude (Anthropic), asistente de chat.** Lo usé para planificar los pasos, redactar las
   instrucciones que le daba a Claude Code y revisar sus reportes.
 
@@ -24,7 +25,8 @@ para qué las usé, qué hice yo y cómo verifiqué lo que generaron.
 - La redacción del informe final, la búsqueda y verificación de las referencias, las figuras y los
   gráficos fueron generados por Claude Code a partir del código y de los resultados medidos. El
   primer borrador del informe lo había armado yo con ayuda de Gemini.
-- Las correcciones de la segunda instancia se hicieron con las mismas herramientas.
+- Las correcciones de la segunda instancia y la posterior a su devolución (hallazgo n1) se hicieron
+  con las mismas herramientas.
 
 ### Qué hice yo
 

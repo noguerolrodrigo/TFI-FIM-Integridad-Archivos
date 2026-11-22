@@ -201,6 +201,16 @@ protegerla y concluyen que ninguna es infalible. Ese problema es el que en este 
 la verificación de la bóveda contra la línea base y con las limitaciones declaradas en el
 Capítulo 6.
 
+La restauración automática tampoco es nueva en la literatura. Kaczmarek y Wróbel (2014) presentan
+ICAR (*integrity checking and recovery*), un sistema que protege la integridad del sistema de
+archivos y restaura automáticamente los archivos modificados. Genera y verifica hashes
+criptográficos de los archivos, y guarda sus propios binarios, las copias de respaldo y la base de
+hashes en un almacenamiento protegido físicamente contra escritura, para eliminar la amenaza de que
+se los modifique sin autorización. Está implementado como una extensión del kernel de Linux, y su
+evaluación experimental informa una degradación aproximada del 10 % en el acceso a los archivos
+protegidos. De este artículo se leyó solo el resumen, y lo que aquí se le atribuye no va más allá
+de él.
+
 En el plano normativo, el control SI-7 del catálogo NIST SP 800-53 pide emplear herramientas de
 verificación de integridad para detectar cambios no autorizados y definir qué acciones se toman
 cuando se detectan. Sus mejoras contemplan la notificación automática al personal cuando hay
@@ -214,7 +224,8 @@ et al., 2025).
 ### Comparación de herramientas
 
 La Tabla 2.1 compara las herramientas y mecanismos más citados con el sistema de este trabajo. Cada
-celda resume lo que dice la documentación que se indica en la primera columna; un guion significa
+celda resume lo que dice la documentación que se indica en la primera columna (en el caso de ICAR,
+el resumen del artículo); un guion significa
 que esa fuente no describe la función, no que la herramienta no pueda cumplirla con otros
 componentes.
 
@@ -230,24 +241,30 @@ componentes.
 | auditd (Red Hat, 2021, 2023) | Reglas del subsistema de auditoría del kernel sobre accesos a archivos y directorios (lectura, escritura, ejecución, atributos) | Registra los accesos y permite informarlos por usuario; las páginas no mencionan contenido ni hashes | — | — | Reglas con `auditctl`; revisión con `ausearch` y `aureport` |
 | fanotify (The Linux man-pages project, 2026a) | Interfaz del kernel de notificación e intercepción de eventos del sistema de archivos | — (es una interfaz, no una herramienta) | Los eventos de permiso permiten autorizar o denegar un acceso | — | Requiere programar contra la interfaz |
 | Enfoques con eBPF (eBPF.io, s.f.; Tetragon, s.f.) | Programas en el kernel; Tetragon observa el acceso a archivos con ganchos y filtra en el kernel | Proceso que accedió y operación; no el contenido | — | — | Privilegios para cargar programas eBPF |
+| ICAR (Kaczmarek y Wróbel, 2014) | Genera y verifica hashes criptográficos de los archivos; extensión del kernel de Linux | — | Restaura automáticamente los archivos modificados desde copias de respaldo | — | Extensión del kernel y almacenamiento protegido físicamente contra escritura; degradación aproximada del 10 % en el acceso a los archivos protegidos |
 | Este trabajo | Eventos de inotify como disparador y comparación con una línea base en PostgreSQL; escaneo al arrancar | Hashes anterior y nuevo, copia del archivo y diff de texto | Restauración desde una copia verificada, cuarentena, modo de aprobación y ventanas de mantenimiento | n8n y Telegram: la persona decide desde la alerta y el monitor ejecuta | Un equipo con Python, PostgreSQL y n8n (sobre Node.js); para las alertas y los botones, una cuenta de Telegram y un túnel ngrok, que son servicios externos |
 
 ### Brecha y aporte
 
 De la comparación surge que la detección en tiempo real y el diff de archivos de texto no son
 novedades: OSSEC y Wazuh los ofrecen, y Wazuh agrega una respuesta activa basada en scripts. También
-la norma contempla revertir los cambios de forma automática (SI-7(5)). Lo que la documentación
-consultada no describe como un conjunto ya resuelto en una herramienta que se instala en un solo
-equipo, sin agentes ni servidor central, es la combinación de tres cosas: la restauración automática desde una copia verificada contra la
-línea base, la decisión de una persona tomada desde la propia alerta (confirmar el incidente,
+la norma contempla revertir los cambios de forma automática (SI-7(5)). Tampoco es una novedad la
+restauración automática de los archivos modificados: ICAR ya la hacía en 2014, y con una copia de
+respaldo mejor protegida que la de este trabajo, porque la guarda en un almacenamiento que no se
+puede escribir, mientras que aquí la bóveda está en el mismo equipo y solo se verifica su hash
+contra la línea base antes de usarla (limitación de la sección 6.4 y recomendación 2 de la
+sección 7.1). Lo que las fuentes consultadas no describen es lo que viene después de detectar y
+restaurar: la decisión de una persona tomada desde la propia alerta (confirmar el incidente,
 restaurar o aceptar el cambio) con efecto sobre la línea base, y el registro de solo-agregar de todo
-el recorrido. Las plataformas que más se acercan lo hacen con una arquitectura de agente y servidor.
+el recorrido, en una herramienta que se instala en un solo equipo, sin agentes ni servidor central.
+Las plataformas que más se acercan lo hacen con una arquitectura de agente y servidor.
 No se afirma que este sistema consuma menos recursos que ellas: requiere cinco componentes (Python,
 PostgreSQL, n8n sobre Node.js, ngrok y Telegram) y su consumo no se midió ni se comparó.
 
 El aporte de este trabajo es, entonces, de integración y de medición, no un algoritmo nuevo: reúne
 mecanismos conocidos (inotify, hashes, diff, restauración atómica, orquestación con aprobación
-humana) en un sistema chico y verificable, documenta las decisiones de diseño y sus límites, y mide
+humana) en un sistema chico y verificable, les agrega la decisión desde la alerta y el registro de
+solo-agregar, documenta las decisiones de diseño y sus límites, y mide
 con datos propios los tiempos de detección, restauración, alerta y decisión. La comparación de la
-Tabla 2.1 se basa en documentación y no en pruebas de esas herramientas, que no se instalaron ni se
+Tabla 2.1 se basa en documentación, y en el caso de ICAR en el resumen del artículo, y no en pruebas de esas herramientas, que no se instalaron ni se
 midieron en este trabajo.

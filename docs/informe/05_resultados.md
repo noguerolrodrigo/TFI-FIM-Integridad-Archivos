@@ -1,7 +1,6 @@
 # CAPÍTULO 5: Resultados
 
-Este capítulo presenta los resultados de las mediciones realizadas sobre el sistema FIM en su
-versión final. Todos los valores provienen de archivos CSV generados por los scripts de medición
+Este capítulo presenta los resultados de las mediciones realizadas sobre el sistema FIM. Todos los valores provienen de archivos CSV generados por los scripts de medición
 del proyecto (carpeta `scripts/`) y se informan tal como fueron registrados: no se descartaron
 valores atípicos ni se repitieron corridas para mejorar los resultados. La fuente de cada tabla se
 indica al pie. Los valores se expresan en milisegundos (ms) salvo que se indique otra unidad.

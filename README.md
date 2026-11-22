@@ -31,6 +31,13 @@ en el commit `39c661c`** (17/11/2026). Qué cambió entre uno y otro:
 - Antes de restaurar se comprueba que la carpeta real del archivo siga dentro del directorio vigilado.
 - `restaurar.py` y el monitor comparten un candado (`flock` sobre `logs/monitor.lock`).
 
+Después de la devolución de la segunda instancia (19/11/2026) se agregó una corrección más, en el
+commit `f2889ed` (22/11/2026), que es el código final: la restauración repone el propietario que el
+archivo tiene en la baseline (`fchown` sobre el temporal, antes del renombrado). Antes lo dejaba a
+nombre del usuario que corre el monitor. Sin root no se puede reponer: el contenido se restaura
+igual y queda anotado en la fila `RESTAURADO`. Las mediciones no se repitieron: en las pruebas los
+archivos eran del mismo usuario que el monitor, y en ese caso no se llega a llamar a `fchown`.
+
 **No apuntar el monitor a directorios con enlaces simbólicos legítimos (por ejemplo `/etc`):** los
 enlaces no entran en la baseline y el monitor los elimina. Esta y las demás limitaciones están en la
 sección 6.4 del informe.
@@ -199,7 +206,7 @@ el `.env`, el monitor registra y guarda la evidencia pero espera la decisión an
 pytest
 ```
 
-Son 196 tests (193 de la aplicación y 3 del script de intervalos de confianza). Los del monitor usan una baseline en memoria y no necesitan base de datos. Los de
+Son 206 tests (203 de la aplicación y 3 del script de intervalos de confianza). Los del monitor usan una baseline en memoria y no necesitan base de datos. Los de
 conexión se saltean si PostgreSQL no está. `tests/test_integracion_bd.py` usa una base aparte,
 `fim_pruebas`, que se prepara con `scripts/preparar_bd_pruebas.sh`; nunca toca `fim_db`.
 

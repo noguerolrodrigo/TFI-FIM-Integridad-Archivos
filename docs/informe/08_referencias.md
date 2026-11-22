@@ -17,6 +17,10 @@ Joint Task Force. (2020). *Security and privacy controls for information systems
 (NIST SP 800-53, Rev. 5). National Institute of Standards and Technology.
 https://doi.org/10.6028/NIST.SP.800-53r5
 
+Kaczmarek, J. y Wróbel, M. R. (2014). Operating system security by integrity checking and recovery
+using write-protected storage. *IET Information Security*, *8*(2), 122–131.
+https://doi.org/10.1049/iet-ifs.2012.0346
+
 Kim, G. H. y Spafford, E. H. (1994). The design and implementation of Tripwire: A file system
 integrity checker. En *Proceedings of the 2nd ACM Conference on Computer and Communications
 Security (CCS '94)* (pp. 18–29). ACM. https://doi.org/10.1145/191177.191183
