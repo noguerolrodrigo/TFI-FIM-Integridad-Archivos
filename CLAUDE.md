@@ -282,8 +282,8 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   versiones (Anexo A): `81b1bc8` (octubre), `39c661c` (medida en 5.9) y `f2889ed` (final). Las
   mediciones no se repitieron: en el laboratorio los archivos eran del usuario del monitor y en ese
   caso no se llama a `fchown` (solo se agrega un `fstat`, cuyo costo no se midió).
-- La prueba que cambia el dueño de verdad solo corre como root; falta ejecutarla así
-  (`sudo venv/bin/pytest tests/test_propietario.py`). Si pasa, sacar la salvedad de la Tabla I.4.
+- La prueba que cambia el dueño de verdad solo corre como root. Rodrigo la corrió el 22/11/2026
+  (`sudo venv/bin/pytest tests/test_propietario.py -v`): 10 passed. Así figura en la Tabla I.4.
 - s1: Kaczmarek y Wróbel (2014), DOI 10.1049/iet-ifs.2012.0346, verificado en Crossref y leído solo
   por su resumen (la página de la editorial no se pudo abrir). Crossref escribe "Wrobel" sin tilde.
 - Anexo I pasó a llamarse "Respuesta a las devoluciones del tribunal" y suma la Tabla I.4. El informe
