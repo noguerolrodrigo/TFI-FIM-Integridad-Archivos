@@ -24,7 +24,8 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   enlaces simbólicos: los saltea y los lista por pantalla.
 - `boveda.py`: respaldo en disco. `respaldar()` copia con `shutil.copy2`; `restaurar()` repone con un
   temporal de nombre aleatorio (`tempfile.mkstemp` en la misma carpeta, prefijo `.fim_tmp_`), copia
-  sobre el descriptor y `os.replace` (atómico). Mientras existe, el temporal figura en
+  sobre el descriptor, le pone el dueño de la baseline (`fchown`, parámetro `owner`; devuelve False
+  si no pudo, y restaura igual) y `os.replace` (atómico). Mientras existe, el temporal figura en
   `boveda.temporales_propios`. `limpiar_huerfanos()` saca lo que ya no está en la baseline vigente.
   La bóveda espeja la ruta absoluta del archivo y está en `.gitignore`.
 - `bd.py`: una sola conexión reutilizable a PostgreSQL (`conectar()`, `ejecutar()` con reconexión).
@@ -158,7 +159,7 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - Material de estudio para la defensa, fuera del repo: `preguntas_y_respuestas.md` en el Escritorio
   de Windows. El PDF de entrega se copia a `TFI_Noguerol_2026_segunda_instancia.pdf` en el mismo lugar.
 
-## CÓDIGO CONGELADO (desde el 16/10/2026; reabierto solo para M2 y m8, cerrado en `39c661c`)
+## CÓDIGO CONGELADO (desde el 16/10/2026; reabierto para M2 y m8, y para n1; cerrado en `f2889ed`)
 - No se agregan funcionalidades. Solo se aceptan arreglos de errores, cada uno en su commit, con
   test que lo cubra cuando se pueda.
 - Si un arreglo toca el monitor, la baseline o los workflows, hay que volver a correr las
@@ -214,7 +215,9 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
   archivos vigilados. Se mitiga verificando su hash contra la baseline antes de restaurar; en
   producción debería estar en otro equipo o ser de root.
 - **Propietario.** Reponer el dueño de un archivo (`chown`) requiere correr como root; sin root
-  el cambio se registra pero no se repone.
+  el cambio se registra pero no se repone. También al restaurar el contenido: sin root, un archivo
+  que era de otro usuario queda a nombre del usuario del monitor (anotado en la fila `RESTAURADO`).
+  El grupo no está en la baseline y no se repone.
 - **Inmutabilidad.** El registro es de solo-agregar para la cuenta del agente (`fim_user`), no
   para el superusuario de PostgreSQL.
 - **Solo directorios.** `RUTAS_MONITOREADAS` acepta directorios, no archivos sueltos.
@@ -269,3 +272,20 @@ de Monitoreo de Integridad de Archivos (FIM) con extracción diferencial en ento
 - MTTD, MTTR y falsos positivos se MIDEN con scripts y se guardan en CSV. No inventar ni simular números.
 - Existe un proyecto aprobado de otros alumnos con un tema parecido: se pueden tomar ideas generales,
   no copiar código.
+
+## Devolución de la segunda instancia (19/11/2026) y defensa
+- Aprobado con 9,20 (`docs/devolucion_segunda_instancia.pdf`). Dejó n1 (la restauración no reponía
+  el propietario) y s1 (citar ICAR). No pide entrega escrita: se presenta en la defensa. Sus diez
+  preguntas para la defensa están en la sección 10 de ese PDF.
+- n1 corregido el 22/11/2026 en `f2889ed`, **que es el código final** (`tests/test_propietario.py`;
+  203 tests de la aplicación, 206 con los del script de intervalos). El informe distingue ahora tres
+  versiones (Anexo A): `81b1bc8` (octubre), `39c661c` (medida en 5.9) y `f2889ed` (final). Las
+  mediciones no se repitieron: en el laboratorio los archivos eran del usuario del monitor y en ese
+  caso no se llama a `fchown` (solo se agrega un `fstat`, cuyo costo no se midió).
+- La prueba que cambia el dueño de verdad solo corre como root; falta ejecutarla así
+  (`sudo venv/bin/pytest tests/test_propietario.py`). Si pasa, sacar la salvedad de la Tabla I.4.
+- s1: Kaczmarek y Wróbel (2014), DOI 10.1049/iet-ifs.2012.0346, verificado en Crossref y leído solo
+  por su resumen (la página de la editorial no se pudo abrir). Crossref escribe "Wrobel" sin tilde.
+- Anexo I pasó a llamarse "Respuesta a las devoluciones del tribunal" y suma la Tabla I.4. El informe
+  tiene 94 páginas y 31 referencias. El PDF para la defensa se copia al Escritorio como
+  `TFI_Noguerol_2026_defensa.pdf`; el entregado (`..._segunda_instancia.pdf`) no se pisa.

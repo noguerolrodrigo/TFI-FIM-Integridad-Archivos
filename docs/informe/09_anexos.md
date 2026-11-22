@@ -851,10 +851,10 @@ la sección 5.9.
 | `intervalos_bootstrap_20261015.csv` / `.md` | Intervalos de confianza del 95 % de las medianas de octubre (sección 5.10). |
 | `README.md` | Lectura de los resultados, comparación con la tabla supuesta del documento de diseño y comparación entre la versión de octubre y la corregida (sección 6). |
 
-## Anexo I: Respuesta a la devolución de la primera instancia
+## Anexo I: Respuesta a las devoluciones del tribunal
 
 El tribunal pidió, junto con la versión corregida, una tabla de respuesta por cada hallazgo de la
-devolución. Las páginas corresponden a este documento y los commits, al repositorio del Anexo A.
+devolución de la primera instancia. Las páginas corresponden a este documento y los commits, al repositorio del Anexo A.
 Donde una corrección no se pudo cumplir del todo, se indica en la misma fila.
 
 **Tabla I.1.** Respuesta a cada hallazgo de la devolución.
@@ -866,7 +866,7 @@ Donde una corrección no se pudo cumplir del todo, se indica en la misma fila.
 | M2 | La restauración seguía enlaces simbólicos en un temporal de nombre predecible, y ese prefijo nunca se vigilaba. | Código: temporal de nombre aleatorio con apertura exclusiva, el filtro ignora solo los temporales propios y el reemplazo de un archivo por un enlace se detecta sin seguirlo, con la prueba de concepto del tribunal como prueba automatizada. Informe: 4.3 y 4.4 explican cada medida, 5.9 mide el efecto con una nueva corrida, y los Anexos A y D se actualizaron al commit final `39c661c`. No queda cerrado del todo: 6.4 declara las limitaciones que quedan (enlaces simbólicos no soportados, intervalo entre comprobar la carpeta y escribir, escrituras que siguen sobre el mismo archivo, archivo nuevo movido por nombre, diff en memoria y lecturas por nombre) y 7.1 condiciona a ellas la ejecución como superusuario. | 4.3 (p. 33); 4.4 (p. 35); 5.9 (p. 55); 6.4 (p. 62); 7.1 (p. 67); Anexo A (p. 73); Anexo D (p. 76) | Código: `1701769`, `3b246fe`, `3a44743`. Informe: `409d553`, `05245c4`. Resultados: `da4ed7a` |
 | M3 | La "tasa de falsos positivos" no era la convencional. | La métrica pasa a llamarse proporción de alertas espurias en todo el informe. 3.3 la define una sola vez, con la fórmula FP / (VP + FP), y explica la diferencia con FP / (FP + VN) y por qué acá no hay verdaderos negativos contables. Los scripts y los CSV conservan su nombre, con una nota. | Resumen (p. 2); 2.6 (p. 18); 3.3 (p. 24); 5.5 (p. 50); 5.7 (p. 52); 6.3 (p. 61) | `c7fe6bc` |
 | m1 | 4.7 hablaba de dos canales de decisión y `restaurar.py` era un tercero. | 4.7 describe los tres caminos y cómo conviven con la regla de una decisión por evento. Se corrigió el comentario de `.env.example`. Que `restaurar.py` no registre una decisión ni avise a n8n queda como limitación (6.4) y como trabajo futuro (7.2). | 4.7 (p. 41); 6.4 (p. 62); 7.2 (p. 68); Anexo C (p. 75) | `2488e91`, `3cded82` |
-| m2 | 4.6 y D.5 describían distinto el aviso a n8n. | Los dos textos dicen lo mismo que el código: tipo de aviso, identificador del evento y resultado. | 4.6 (p. 40); D.5 (p. 80) | `0b14bfc` |
+| m2 | 4.6 y D.5 describían distinto el aviso a n8n. | Los dos textos dicen lo mismo que el código: tipo de aviso, identificador del evento y resultado. | 4.6 (p. 40); D.5 (p. 81) | `0b14bfc` |
 | m3 | "Compatible con la variabilidad esperable" sin cálculo. | Se agregó el cálculo, rehecho desde el CSV: la diferencia equivale a 1,1 errores estándar. | 5.6 (p. 51) | `fd51288`, `286da13` |
 | m4 | Las medianas no tenían intervalos de confianza. | Intervalos de confianza del 95 % por bootstrap para las medianas principales, en una tabla aparte (Tabla 5.13), con el método descripto en 3.6. | 3.6 (p. 28); 5.10 (p. 58) | `3eabf6f` |
 | m5 | "De los 15 valores medidos": el CSV tiene 19. | Se aclara que los 15 excluyen los 4 valores del control y que el control del borrado (401,2 ms) también es máximo. | 5.8 (p. 53) | `5786f9d` |
@@ -875,7 +875,7 @@ Donde una corrección no se pudo cumplir del todo, se indica en la misma fila.
 | m8 | Una prueba de `tests/test_permisos.py` fallaba al ejecutarse como superusuario. | La prueba se saltea con `skipif(os.geteuid() == 0)`. | Código (`tests/test_permisos.py`) | `80ba02c` |
 | m9 | Las definiciones de las métricas se repetían en 3.3 y 5.1. | Quedan solo en 3.3; 5.1 remite a ellas. | 3.3 (p. 24); 5.1 (p. 47) | `daceb94` |
 | f1 | Las líneas de código largas se cortaban en los anexos. | Las líneas de más de 90 caracteres se parten al armar el documento: la continuación conserva la sangría y repite el signo de comentario o empieza con la marca ». Verificado en el PDF línea por línea. | Anexo C (p. 75); Anexo D (p. 76) | `3a7401f` |
-| f2 | Nombres de archivo partidos en las tablas. | El ancho de cada columna asegura primero su palabra más larga. | 3.5 (p. 27); Tabla 4.2 (p. 39); Tabla E.1 (p. 84); Tabla H.1 (p. 87) | `d83bdde` |
+| f2 | Nombres de archivo partidos en las tablas. | El ancho de cada columna asegura primero su palabra más larga. | 3.5 (p. 27); Tabla 4.2 (p. 39); Tabla E.1 (p. 85); Tabla H.1 (p. 88) | `d83bdde` |
 | f3 | Espaciado inconsistente de las unidades. | Espacio fino de no separación entre cada número y su unidad. | Todo el documento | `9c3400e` |
 | f4 | Faltaban el índice de figuras, el de tablas y la lista de siglas. | Se agregaron después del índice general. | Índice de figuras (p. 9); Índice de tablas (p. 10); Lista de siglas (p. 11) | `27a7498` |
 | f5 | La portada decía "Docentes" sin el rol y no había Abstract. | La portada indica los directores de tesis y el título al que se aspira. Se agregó el Abstract con sus palabras clave. | Portada (p. 1); Abstract (p. 3) | `a79a810` |
@@ -918,3 +918,14 @@ cambios.
 | Comparación entre corridas | El umbral de 35 ms es descriptivo; se justifica el uso de los valores de octubre y se agregan los de B2. | 5.9; 6.1 | `716131d` |
 | Alcance de dos mediciones | El 0 % de alertas espurias vale para vim y nano por defecto; los 9,7 ms del escaneo no representan a `/etc` ni a `/usr/bin`. | 5.5; 5.6 | `716131d` |
 | Limitaciones que faltaba declarar | Enlaces duros externos, directorios nuevos, desborde de la cola de inotify, bóveda alterada, archivos nuevos legítimos, línea base falsificable con la cuenta del monitor, diff sin enmascarar, motivo de la respuesta fallida, y repetición de alertas en modo de aprobación. | 4.4; 6.4; 7.1; 7.2; D.3 | `e7c40b2` |
+
+El tribunal aprobó la segunda instancia el 19 de noviembre de 2026 y dejó un hallazgo menor (n1) y
+una sugerencia (s1) para presentar en la defensa. La Tabla I.4 responde a los dos. Las mediciones no
+se repitieron (Anexo A).
+
+**Tabla I.4.** Respuesta a la devolución de la segunda instancia.
+
+| ID | Hallazgo | Qué se cambió | Sección y página | Commit |
+|---|---|---|---|---|
+| n1 | La restauración no repone el propietario del archivo: el temporal queda a nombre del usuario que ejecuta el monitor y así se renombra sobre el original. | Código: antes del renombrado se aplica `os.fchown` sobre el descriptor del temporal con el propietario de la línea base; sin permiso, se restaura igual y queda anotado en la fila `RESTAURADO` o en la ejecución de la decisión. Alcanza al monitor, a `restaurar.py` y a la aceptación de un cambio. Diez pruebas nuevas: la del tribunal, que cambia el propietario de verdad y solo se ejecuta como superusuario, y nueve con `os.fchown` simulado, que se ejecutan siempre. No se pudo cumplir del todo: el grupo no se repone, porque ni la línea base ni la bóveda lo registran, y la prueba que requiere superusuario no se ejecutó en el equipo del autor (se omite sin esos permisos). | 4.3 (p. 34); 4.9 (p. 45); 6.4 (p. 64); Anexo A (p. 73); D.3 y D.4 (pp. 79 y 80) | `f2889ed`; informe: `88f1646` |
+| s1 | Antecedentes con restauración automática: faltaba el sistema ICAR. | Se abrió el DOI y se verificó la ficha del artículo de Kaczmarek y Wróbel (2014); el texto completo no se pudo leer, por lo que se le atribuye solo lo que dice su resumen. Entra en los antecedentes de 2.9, en una fila de la Tabla 2.1 y en las Referencias. La brecha se ajustó: la restauración automática ya existe en la literatura, y el aporte queda en la decisión de una persona desde la alerta y en el registro de solo-agregar. 7.1 lo cita al recomendar proteger la bóveda. | 2.9 (pp. 20–22); 7.1 (p. 67); Referencias (p. 70) | `88f1646` |
