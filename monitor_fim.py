@@ -361,6 +361,12 @@ def firma_de_aprobacion(aprobado_por):
         return "."
     return f", con aprobación de {aprobado_por}."
 
+def nota_si_falta_el_propietario(repuesto, owner):
+    """Texto para el registro cuando el contenido se repuso pero el dueño no (vacío si se pudo)."""
+    if repuesto:
+        return ""
+    return f" No se pudo reponer el propietario (uid {owner}): hace falta correr como root."
+
 def avisar_pendiente(ruta):
     print("[*] PENDIENTE DE APROBACIÓN: no se restaura. Para restaurar, ejecutá:")
     print(f"    python restaurar.py '{ruta}'")
@@ -579,12 +585,15 @@ def _procesar_abierto(ruta, nombre, descriptor, destino_enlace, carpeta_afuera, 
                 return PENDIENTE, evento_id
             else:
                 # 2. RESTAURACIÓN: Reponemos el original desde la bóveda en disco
-                boveda.restaurar(ruta)
+                # con el dueño que tiene en la baseline (el archivo repuesto es uno nuevo)
+                propietario_repuesto = boveda.restaurar(ruta, owner=baseline["owner"])
                 log_to_db(nombre, ruta, get_sha256(ruta), RESTAURADO,
                           f"Restaurado desde la bóveda tras un evento {evento}" + firma_de_aprobacion(aprobado_por)
-                          + nota_copia,
+                          + nota_copia + nota_si_falta_el_propietario(propietario_repuesto, baseline["owner"]),
                           hash_anterior=h, ruta_cuarentena=ruta_cuarentena)
                 print(f"[+] RESTAURACIÓN EXITOSA: El archivo original ha sido recuperado.")
+                if not propietario_repuesto:
+                    print(f"[!]{nota_si_falta_el_propietario(False, baseline['owner'])}")
                 resultado = RESTAURADO
         print("-" * 50)
 
@@ -618,6 +627,7 @@ def aceptar_cambio(d):
     Devuelve (resultado, detalle).
     """
     ruta = d["ruta"]
+    propietario_repuesto = True
     if carpeta_real_fuera_de_la_raiz(ruta) is not None:
         return "RECHAZADA", ("La carpeta del archivo es un enlace que lleva afuera del directorio vigilado: "
                              "no se acepta.")
@@ -626,7 +636,8 @@ def aceptar_cambio(d):
         copia = d["ruta_cuarentena"]
         if not copia or get_sha256(copia) != d["hash"]:
             return "RECHAZADA", "La copia de cuarentena falta o no coincide con el hash del evento: no se acepta."
-        boveda.reponer_desde(copia, ruta)
+        # con el dueño que tenía esa versión cuando se registró el evento
+        propietario_repuesto = boveda.reponer_desde(copia, ruta, owner=d["owner"])
     elif d["evento"] in (ELIMINADO, MOVIDO):
         if os.path.lexists(ruta):
             os.remove(ruta)
@@ -647,7 +658,8 @@ def aceptar_cambio(d):
     motivo = (f"Cambio aceptado por {d['decidido_por']} ({d['canal']}), "
               f"decisión #{d['id']} sobre el evento #{d['evento_id']}.")
     version = generar_baseline.actualizar_archivo(ruta, motivo)
-    return "EJECUTADA", f"Baseline versión {version}: {motivo}"
+    return "EJECUTADA", (f"Baseline versión {version}: {motivo}"
+                         + nota_si_falta_el_propietario(propietario_repuesto, d["owner"]))
 
 def _ejecutar_decision(d):
     """Valida la decisión y la aplica. Devuelve (resultado, detalle)."""

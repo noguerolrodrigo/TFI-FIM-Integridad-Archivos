@@ -29,12 +29,38 @@ def respaldar(ruta, boveda=None):
     shutil.copy2(ruta, destino)
     return destino
 
-def restaurar(ruta, boveda=None):
-    """Repone el archivo desde la bóveda. Lanza FileNotFoundError si no hay respaldo."""
-    reponer_desde(ruta_en_boveda(ruta, boveda), ruta)
+def restaurar(ruta, boveda=None, owner=None):
+    """Repone el archivo desde la bóveda. Lanza FileNotFoundError si no hay respaldo.
 
-def reponer_desde(origen, ruta):
-    """Copia origen sobre ruta (bytes, permisos y fechas) sin que el archivo quede a medio escribir."""
+    owner es el uid que tiene que quedar como dueño (el de la baseline). Devuelve False si el
+    contenido se repuso pero el dueño no se pudo cambiar.
+    """
+    return reponer_desde(ruta_en_boveda(ruta, boveda), ruta, owner)
+
+def reponer_propietario(descriptor, owner):
+    """Deja el archivo abierto a nombre del uid pedido. Devuelve False si no se pudo.
+
+    owner llega como lo guarda la baseline: el uid en texto, o "N/A" si no se pudo leer.
+    """
+    if owner is None or not str(owner).isdigit():
+        return True
+    uid = int(owner)
+    if os.fstat(descriptor).st_uid == uid:
+        return True
+    try:
+        # Cambiar el dueño de un archivo solo lo puede hacer root. El grupo no se toca (-1):
+        # la baseline no lo registra.
+        os.fchown(descriptor, uid, -1)
+        return True
+    except OSError:
+        return False
+
+def reponer_desde(origen, ruta, owner=None):
+    """Copia origen sobre ruta (bytes, permisos y fechas) sin que el archivo quede a medio escribir.
+
+    Si se pasa owner (uid), el archivo queda a nombre de ese usuario. Devuelve False si eso no
+    se pudo (falta root): el contenido se repone igual.
+    """
     carpeta, nombre = os.path.split(os.path.abspath(ruta))
     os.makedirs(carpeta, exist_ok=True)
 
@@ -53,10 +79,15 @@ def reponer_desde(origen, ruta):
                 shutil.copyfileobj(fuente, destino)
                 destino.flush()
                 datos = os.fstat(fuente.fileno())
+                # El temporal nace a nombre del usuario que corre el monitor. El dueño se repone
+                # antes del renombrado, para que el archivo nunca aparezca en su ruta con otro
+                # dueño, y antes de los permisos, porque cambiar el dueño borra el bit setuid.
+                propietario_repuesto = reponer_propietario(destino.fileno(), owner)
                 os.fchmod(destino.fileno(), stat.S_IMODE(datos.st_mode))
                 os.utime(destino.fileno(), ns=(datos.st_atime_ns, datos.st_mtime_ns))
             # os.replace renombra el nombre, sin seguir enlaces: si ruta es un enlace, lo reemplaza
             os.replace(temporal, ruta)
+            return propietario_repuesto
         except BaseException:
             if os.path.lexists(temporal):
                 os.unlink(temporal)
